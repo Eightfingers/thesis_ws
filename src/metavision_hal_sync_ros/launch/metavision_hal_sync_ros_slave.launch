@@ -1,0 +1,23 @@
+<launch>
+    <!-- Launch the metavision_hal_sync_ros node -->
+    <node name="metavision_hal_sync_ros_slave" pkg="metavision_hal_sync_ros" type="metavision_hal_sync_ros" output="screen" >
+
+    
+    <param name="event_topic_name" type="string" value="/event_out_left/slave" />
+    <param name="camera_serial" type="string" value="Prophesee:hal_plugin_prophesee:00051238" />
+    <param name="out_raw_file_path" type="string" value="" />
+
+    <param name="mode_master" type="bool" value="false" />
+    <param name="mode_slave" type="bool" value="true" />
+    <param name="fps" type="int" value="30" />
+
+    <param name="bias_diff_off" type="int" value="190" />
+    <param name="bias_diff_on" type="int" value="110" />
+    <param name="bias_hpf" type="int" value="37" />
+
+    <!-- micro seconds -->
+    <param name="event_trail_filter_threshold" type="int" value="100000" /> 
+
+    </node>
+
+</launch>

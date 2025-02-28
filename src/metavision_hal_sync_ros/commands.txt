@@ -1,0 +1,10 @@
+python, run slave first
+python3 metavision_sync_pub_slave.py -s Prophesee:hal_plugin_prophesee:00051238 -m slave
+python3 metavision_sync_pub_master.py -s Prophesee:hal_plugin_prophesee:00050655 -m master
+
+C++
+./metavision_hal_sync -s Prophesee:hal_plugin_prophesee:00051238 --slave
+./metavision_hal_sync -s Prophesee:hal_plugin_prophesee:00050655 --master
+
+converting to csv
+python3 metavision_file_to_csv.py -i recording_250212_114142_slave.raw -o .

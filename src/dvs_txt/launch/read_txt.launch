@@ -1,0 +1,27 @@
+<launch>
+  <node name="dvs_txt_node" pkg="dvs_txt" type="dvs_txt" output="screen">
+
+  <!-- REMEMBER TO CHANGE CAMERA SIZE TOO!, THE METAVISION DATASET IS IN CSV WHILE THE CHINESE DATASET IS IN TXT  -->
+  <param name="file_is_txt" type="bool" value="true" />
+  <param name="camera_height" type="int" value="180" />
+  <param name="camera_width" type="int" value="240" />
+  <!-- <param name="camera_height" type="int" value="720" />
+  <param name="camera_width" type="int" value="1280" /> -->
+
+  <param name="loop_rate" type="double" value="0.05" />
+
+  <param name="file_path" type="string" value="/home/asus/thesis_ws/src/dvs_txt/resource/walking2.txt" />
+  <param name="left_csv_file_path" type="string" value="/home/asus/thesis_ws/src/metavision_dvs_txt/resource/master.csv" />
+  <param name="right_csv_file_path" type="string" value="/home/asus/thesis_ws/src/metavision_dvs_txt/resource/slave.csv" />
+
+  <param name="disparity_range" type="int" value="30" />
+  <param name="SAD_block_size" type="int" value="13" />
+  <param name="NN_min_num_of_events" type="int" value="3" />
+  <param name="NN_block_size" type="int" value="7" />
+  
+  <param name="publish_slice" type="bool" value="false" />
+  <param name="slice_start_time" type="double" value="0.60" />
+  <param name="slice_end_time" type="double" value="0.65" />
+  </node>
+
+</launch>
