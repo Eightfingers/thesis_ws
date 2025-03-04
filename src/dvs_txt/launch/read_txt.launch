@@ -5,6 +5,8 @@
   <param name="file_is_txt" type="bool" value="true" />
   <param name="camera_height" type="int" value="180" />
   <param name="camera_width" type="int" value="240" />
+
+  <!-- <param name="file_is_txt" type="bool" value="false" /> -->
   <!-- <param name="camera_height" type="int" value="720" />
   <param name="camera_width" type="int" value="1280" /> -->
 
@@ -15,13 +17,21 @@
   <param name="right_csv_file_path" type="string" value="/home/asus/thesis_ws/src/metavision_dvs_txt/resource/slave.csv" />
 
   <param name="disparity_range" type="int" value="30" />
-  <param name="SAD_block_size" type="int" value="13" />
+  <param name="window_block_size" type="int" value="15" />
   <param name="NN_min_num_of_events" type="int" value="3" />
   <param name="NN_block_size" type="int" value="7" />
   
-  <param name="publish_slice" type="bool" value="false" />
-  <param name="slice_start_time" type="double" value="0.60" />
-  <param name="slice_end_time" type="double" value="0.65" />
+  <param name="publish_slice" type="bool" value="true" />
+  <param name="slice_start_time" type="double" value="2.60" />
+  <param name="slice_end_time" type="double" value="2.65" />
+
+  <param name="do_adaptive_window" type="bool" value="true" />
+  <param name="small_block_size" type="int" value="5" />
+  <param name="medium_block_size" type="int" value="11" />
+  <param name="large_block_size" type="int" value="15" />
+  <param name="threshold_edge" type="int" value="410" />
+
+
   </node>
 
 </launch>

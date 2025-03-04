@@ -24,6 +24,7 @@ DVSReadTxt::DVSReadTxt(ros::NodeHandle &nh, ros::NodeHandle nh_private) : nh_(nh
     nh_private.param<bool>("write_to_text", write_to_text_, false);
     nh_private.param<bool>("calc_disparity", calc_disparity_, false);
     nh_private.param<bool>("file_is_txt", file_is_txt_, true);
+    nh_private.param<bool>("do_adaptive_window", do_adaptive_window_, true);
 
     nh_private.param<std::string>("file_path", event_txt_file_path_, "/home/asus/thesis_ws/src/dvs_txt/resource/box2.txt");
     nh_private.param<std::string>("left_csv_file_path", left_event_csv_file_path_, "/home/asus/thesis_ws/src/dvs_txt/resource/master.csv");
@@ -37,6 +38,12 @@ DVSReadTxt::DVSReadTxt(ros::NodeHandle &nh, ros::NodeHandle nh_private) : nh_(nh
     nh_private.param<int>("NN_block_size", NN_block_size_, 11);
     nh_private.param<int>("NN_min_num_of_events", NN_min_num_of_events_, 3);
 
+    nh_private.param<int>("threshold_edge", threshold_edge_, 50);
+
+    nh_private.param<int>("small_block_size", small_block_size_, 7);
+    nh_private.param<int>("medium_block_size", medium_block_size_, 9);
+    nh_private.param<int>("large_block_size", large_block_size_, 11);
+
     std::cout << "NN_min_num_of_events_.. " << NN_min_num_of_events_ << std::endl;
 
     std::cout << "Reading text file.. " << event_txt_file_path_ << std::endl;
@@ -46,21 +53,34 @@ DVSReadTxt::DVSReadTxt(ros::NodeHandle &nh, ros::NodeHandle nh_private) : nh_(nh
     image_transport::ImageTransport it_(nh);
     img_pub_disparity_gt_left_ = it_.advertise("disparity_gt_left_", 1);
     img_pub_disparity_gt_right_ = it_.advertise("disparity_gt_right_", 1);
+    debug_image_pub_ = it_.advertise("debug_img", 1);
 
     cv_image_.encoding = "bgr8";
     cv_image_.image = cv::Mat(camera_height_, camera_width_, CV_8U, cv::Scalar(0));
+
+    // debug_image_.encoding = "32FC1";  
+    // debug_image_.image = cv::Mat(camera_height_, camera_width_, CV_32F, cv::Scalar(0));  
+    debug_image_.encoding = "mono8";  
+    debug_image_.image = cv::Mat(camera_height_, camera_width_, CV_32F, cv::Scalar(0));  
 
     cv_image_disparity_.encoding = "bgr8";
     cv_image_disparity_.image = cv::Mat(camera_height_, camera_width_, CV_8U, cv::Scalar(0));
     sad_disparity_pub_ = it_.advertise("left_disparity", 1);
 
     event_image_left_polarity_ = cv::Mat(camera_height_, camera_width_, CV_8U, cv::Scalar(127));
-    disparity_gt_left_  = cv::Mat(camera_height_, camera_width_, CV_64F, cv::Scalar(0));
+    disparity_gt_left_ = cv::Mat(camera_height_, camera_width_, CV_64F, cv::Scalar(0));
 
     event_image_right_polarity_ = cv::Mat(camera_height_, camera_width_, CV_8U, cv::Scalar(126));
-    disparity_gt_right_  = cv::Mat(camera_height_, camera_width_, CV_64F, cv::Scalar(0));
+    disparity_gt_right_ = cv::Mat(camera_height_, camera_width_, CV_64F, cv::Scalar(0));
 
     color_map_ = cv::Mat(camera_height_, camera_width_, CV_8U, cv::Scalar(0));
+
+    sobel_x_ = cv::Mat::zeros(event_image_left_polarity_.size(), CV_64F);
+    sobel_y_ = cv::Mat::zeros(event_image_left_polarity_.size(), CV_64F);
+    mean_ = cv::Mat::zeros(event_image_left_polarity_.size(), CV_64F);
+    mean_sq_ = cv::Mat::zeros(event_image_left_polarity_.size(), CV_64F);
+    gradient_sq_ = cv::Mat::zeros(event_image_left_polarity_.size(), CV_64F);
+    window_size_map_ = cv::Mat::zeros(event_image_left_polarity_.size(), CV_8U);
 
     gt_disparity_left_file_.open(gt_disparity_left_path_);
     gt_disparity_right_file_.open(gt_disparity_right_path_);
@@ -117,9 +137,13 @@ void DVSReadTxt::readFile()
                     event.ts = ros_ts;
                     event.x = x;
                     event.y = y;
-                    if ((bool)polarity){
+                    
+                    if ((bool)polarity)
+                    {
                         event.polarity = 255;
-                    }else{
+                    }
+                    else
+                    {
                         event.polarity = 0;
                     }
                     left_events_.emplace_back(event);
@@ -134,9 +158,12 @@ void DVSReadTxt::readFile()
                     event.ts = ros_ts;
                     event.x = x;
                     event.y = y;
-                    if ((bool)polarity){
+                    if ((bool)polarity)
+                    {
                         event.polarity = 255;
-                    }else{
+                    }
+                    else
+                    {
                         event.polarity = 0;
                     }
                     right_events_.emplace_back(event);
@@ -252,7 +279,7 @@ void DVSReadTxt::publishOnce(double start_time, double end_time)
             disparity_gt_left_,
             map1_x,
             map1_y);
-        
+
         // Apply Nearest Neighbor filtering
         applyNearestNeighborFilter(event_image_left_polarity_, 127);
 
@@ -270,6 +297,17 @@ void DVSReadTxt::publishOnce(double start_time, double end_time)
 
         // Apply Nearest Neighbor filtering
         applyNearestNeighborFilter(event_image_right_polarity_, 126);
+
+        if (do_adaptive_window_)
+        {
+            createAdaptiveWindowMap(event_image_left_polarity_,
+                                    sobel_x_,
+                                    sobel_y_,
+                                    mean_,
+                                    mean_sq_,
+                                    gradient_sq_,
+                                    window_size_map_);
+        }
 
         publishGTDisparity(
             disparity_gt_left_,
@@ -324,29 +362,29 @@ void DVSReadTxt::readTimeSliceEventsVec(
 
             int row = tmp.y;
             int col = tmp.x;
-            bool polarity = tmp.polarity;
+            uchar polarity = tmp.polarity;
 
             event_image_disp_gt.at<double>(row, col) = disparity;
             event_image_polarity.at<uchar>(row, col) = (uchar)polarity;
             if (current_ts > end_time)
             {
+                start_index = i;
                 // exit loop as this event has exceeded end time
                 break;
             }
         }
     }
-
 }
 
-void DVSReadTxt::applyNearestNeighborFilter(cv::Mat &event_image, int value_of_empty_cell)
+void DVSReadTxt::applyNearestNeighborFilter(cv::Mat &event_image_pol, int value_of_empty_cell)
 {
     auto start_time_NN = std::chrono::high_resolution_clock::now();
-    
-    for (int y = NN_block_size_ / 2; y < event_image.rows - NN_block_size_ / 2; y++)
+
+    for (int y = NN_block_size_ / 2; y < event_image_pol.rows - NN_block_size_ / 2; y++)
     {
-        for (int x = NN_block_size_ / 2; x < event_image.cols - NN_block_size_ / 2; x++)
+        for (int x = NN_block_size_ / 2; x < event_image_pol.cols - NN_block_size_ / 2; x++)
         {
-            if (event_image.at<uchar>(y, x) == value_of_empty_cell)
+            if (event_image_pol.at<uchar>(y, x) == value_of_empty_cell)
             {
                 continue; // skip processing
             }
@@ -364,7 +402,7 @@ void DVSReadTxt::applyNearestNeighborFilter(cv::Mat &event_image, int value_of_e
                             continue;
                         }
 
-                        if (event_image.at<uchar>(y + wy, x + wx) != value_of_empty_cell)
+                        if (event_image_pol.at<uchar>(y + wy, x + wx) != value_of_empty_cell)
                         {
                             num_of_events++;
                             if (num_of_events == NN_min_num_of_events_)
@@ -380,7 +418,7 @@ void DVSReadTxt::applyNearestNeighborFilter(cv::Mat &event_image, int value_of_e
 
                 if (noise) // remove that event
                 {
-                    event_image.at<uchar>(y, x) = value_of_empty_cell;
+                    event_image_pol.at<uchar>(y, x) = value_of_empty_cell;
                 }
             }
         }
@@ -389,6 +427,49 @@ void DVSReadTxt::applyNearestNeighborFilter(cv::Mat &event_image, int value_of_e
     auto end_time_NN = std::chrono::high_resolution_clock::now();
     auto duration_NN = std::chrono::duration_cast<std::chrono::microseconds>(end_time_NN - start_time_NN);
     std::cout << "Nearest neighbor filtering took: " << duration_NN.count() / 1000.0 << " milliseconds" << std::endl;
+}
+
+void DVSReadTxt::createAdaptiveWindowMap(cv::Mat &event_image_pol,
+                                         cv::Mat &sobel_x,
+                                         cv::Mat &sobel_y,
+                                         cv::Mat &mean,
+                                         cv::Mat &mean_sq,
+                                         cv::Mat &gradient_sq,
+                                         cv::Mat &image_window_sizes)
+{
+    cv::Sobel(event_image_pol, sobel_x, CV_64F, 1, 0, 3);
+    cv::Sobel(event_image_pol, sobel_y, CV_64F, 0, 1, 3);
+
+    cv::Mat gradient_magnitude;
+    cv::magnitude(sobel_x, sobel_y, gradient_magnitude);
+
+    // Convert to displayable range
+    cv::Mat tmp;
+    tmp = gradient_magnitude.clone();
+    cv::normalize(tmp, tmp, 0, 255, cv::NORM_MINMAX, CV_8U);
+    
+    tmp.copyTo(debug_image_.image);
+    debug_image_pub_.publish(debug_image_.toImageMsg());
+
+    for (int i = 0; i < image_window_sizes.rows; i++)
+    {
+        for (int j = 0; j < image_window_sizes.cols; j++)
+        {
+            if (event_image_pol.at<uchar>(i, j) == 127)
+            {
+                continue; // skip processing
+            }
+            double grad_val = gradient_magnitude.at<double>(i, j);
+            if (grad_val > threshold_edge_)
+            {
+                image_window_sizes.at<uchar>(i, j) = small_block_size_;
+            }
+            else
+            { 
+                image_window_sizes.at<uchar>(i, j) = large_block_size_;
+            }
+        }
+    }
 }
 
 void DVSReadTxt::publishGTDisparity(cv::Mat &disparity_gt, image_transport::Publisher &disparity_gt_image_pub)
@@ -417,8 +498,8 @@ void DVSReadTxt::calcPublishDisparity(
 
     auto start_time = std::chrono::high_resolution_clock::now();
 
-    const int half_block = window_block_size_ / 2;
-    const double total_pixel = window_block_size_ * window_block_size_;
+    int half_block = window_block_size_ / 2;
+    double total_pixel = window_block_size_ * window_block_size_;
 
     for (int y = half_block; y < event_image_polarity_left.rows - half_block; y++)
     {
@@ -433,6 +514,13 @@ void DVSReadTxt::calcPublishDisparity(
             int best_disparity = 0;
             double min_cost = 10000000;
             bool out_of_bounds = false;
+
+            if (do_adaptive_window_)
+            {
+                int window_size = window_size_map_.at<uchar>(y, x);
+                half_block = window_size / 2;
+                total_pixel = window_size * window_size;
+            }
 
             // Compare blocks at different disparities
             for (int d = 0; d < disparity_range_; d++)
@@ -482,7 +570,7 @@ void DVSReadTxt::calcPublishDisparity(
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
     std::cout << "Disp calculation took: " << duration.count() / 1000.0 << " milliseconds" << std::endl;
 
-    disparity.convertTo(disparity, CV_8U); // Convert from 64F to 8U
+    disparity.convertTo(disparity, CV_8U);                      // Convert from 64F to 8U
     cv::applyColorMap(disparity, color_map_, cv::COLORMAP_JET); // convert to colour map
     color_map_.copyTo(cv_image_disparity_.image);
     sad_disparity_pub_.publish(cv_image_disparity_.toImageMsg());
@@ -508,6 +596,9 @@ void DVSReadTxt::loopOnce()
         auto algo_start = high_resolution_clock::now();
         if (publish_slice_)
         {
+            // need to reset index ...
+            left_event_index_ = 0;
+            right_event_index_ = 0;
             publishOnce(start_offset + slice_start_time_, start_offset + slice_end_time_);
         }
         else
@@ -516,6 +607,7 @@ void DVSReadTxt::loopOnce()
         }
         auto algo_end = high_resolution_clock::now();
         duration<double> algo_duration = algo_end - algo_start;
-        std::cout << "Algorithm execution time: " << algo_duration.count()*1000 << " milliseconds" << std::endl;
+
+        std::cout << "Algorithm execution time: " << algo_duration.count() * 1000 << " milliseconds" << std::endl;
     }
 }

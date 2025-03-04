@@ -49,7 +49,15 @@ private:
         cv::Mat &left_gt_disparity,
         std::ofstream &file);
 
-    void applyNearestNeighborFilter(cv::Mat &event_image, int value_of_empty_cell);
+    void applyNearestNeighborFilter(cv::Mat &event_image_pol, int value_of_empty_cell);
+
+    void createAdaptiveWindowMap(cv::Mat &event_image_pol,
+                                        cv::Mat &sobel_x,
+                                        cv::Mat &sobel_y,
+                                        cv::Mat &mean,
+                                        cv::Mat &mean_sq,
+                                        cv::Mat &gradient_sq,
+                                        cv::Mat &image_window_sizes);
 
     ros::NodeHandle nh_;
     ros::NodeHandle p_nh_;
@@ -64,10 +72,10 @@ private:
 
     std::chrono::time_point<std::chrono::high_resolution_clock> time_start_;
     std::chrono::high_resolution_clock::time_point loop_timer_;
-    cv_bridge::CvImage cv_image_;
 
     image_transport::Publisher img_pub_disparity_gt_left_;
     image_transport::Publisher img_pub_disparity_gt_right_;
+    image_transport::Publisher debug_image_pub_;
 
     std::string left_event_csv_file_path_;
     std::string right_event_csv_file_path_;
@@ -80,6 +88,7 @@ private:
     bool publish_slice_ = false;
     bool file_is_txt_ = false;
     bool write_to_text_ = false;
+    bool do_adaptive_window_ = true;
     int camera_height_;
     int camera_width_;
     double loop_rate_;
@@ -91,7 +100,14 @@ private:
     int left_event_index_ = 0;
     int right_event_index_ = 0;
 
+    int small_block_size_;
+    int medium_block_size_;
+    int large_block_size_;
+
+    cv_bridge::CvImage cv_image_;
     cv_bridge::CvImage cv_image_disparity_;
+    cv_bridge::CvImage debug_image_;
+
     image_transport::Publisher sad_disparity_pub_;
     int disparity_range_;   // Maximum disparity
     int window_block_size_; // window size (must be odd)
@@ -109,6 +125,11 @@ private:
     std::ofstream gt_disparity_left_file_;
     std::ofstream gt_disparity_right_file_;
     std::ofstream disparity_file_;
+
+    // Adaptive winmdow
+    cv::Mat sobel_x_, sobel_y_, mean_, mean_sq_, gradient_sq_;
+    cv::Mat window_size_map_;
+    int threshold_edge_;
 
     std::string gt_disparity_left_path_ = "gt_disparity_left.txt";
     std::string gt_disparity_right_path_ = "gt_disparity_right.txt";
