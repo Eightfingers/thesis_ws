@@ -34,7 +34,6 @@ private:
         std::vector<dvs_msgs::Event> &event_vector,
         std::vector<double> &disparity_vector,
         dvs_msgs::EventArray &event_arr,
-        cv::Mat &event_image,
         cv::Mat &event_image_polarity,
         cv::Mat &event_image_disp_gt,
         cv::Mat &map1_x,
@@ -45,12 +44,12 @@ private:
         image_transport::Publisher &disparity_gt_image_pub);
 
     void calcPublishDisparity(
-        cv::Mat &event_image_left,
         cv::Mat &event_image_polarity_left,
-        cv::Mat &event_image_right,
         cv::Mat &event_image_polarity_right,
         cv::Mat &left_gt_disparity,
         std::ofstream &file);
+
+    void applyNearestNeighborFilter(cv::Mat &event_image, int value_of_empty_cell);
 
     ros::NodeHandle nh_;
     ros::NodeHandle p_nh_;
@@ -91,7 +90,7 @@ private:
     int NN_min_num_of_events_;
     int left_event_index_ = 0;
     int right_event_index_ = 0;
-    // SAD algorithm stuff
+
     cv_bridge::CvImage cv_image_disparity_;
     image_transport::Publisher sad_disparity_pub_;
     int disparity_range_;   // Maximum disparity
@@ -101,13 +100,9 @@ private:
     cv::Mat event_disparity_;
     cv::Mat color_map_;
 
-    cv::Mat event_image_left_;
-    cv::Mat event_image_left_disparity_gt_;
     cv::Mat event_image_left_polarity_;
     cv::Mat disparity_gt_left_;
 
-    cv::Mat event_image_right_;
-    cv::Mat event_image_right_disparity_gt_;
     cv::Mat event_image_right_polarity_;
     cv::Mat disparity_gt_right_;
 

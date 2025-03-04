@@ -54,14 +54,10 @@ DVSReadTxt::DVSReadTxt(ros::NodeHandle &nh, ros::NodeHandle nh_private) : nh_(nh
     cv_image_disparity_.image = cv::Mat(camera_height_, camera_width_, CV_8U, cv::Scalar(0));
     sad_disparity_pub_ = it_.advertise("left_disparity", 1);
 
-    event_image_left_ = cv::Mat(camera_height_, camera_width_, CV_64F, cv::Scalar(0));
-    event_image_left_polarity_ = cv::Mat(camera_height_, camera_width_, CV_8U, cv::Scalar(8));
-    event_image_left_disparity_gt_ = cv::Mat(camera_height_, camera_width_, CV_64F, cv::Scalar(0));
+    event_image_left_polarity_ = cv::Mat(camera_height_, camera_width_, CV_8U, cv::Scalar(127));
     disparity_gt_left_  = cv::Mat(camera_height_, camera_width_, CV_64F, cv::Scalar(0));
 
-    event_image_right_ = cv::Mat(camera_height_, camera_width_, CV_64F, cv::Scalar(0));
-    event_image_right_polarity_ = cv::Mat(camera_height_, camera_width_, CV_8U, cv::Scalar(9));
-    event_image_right_disparity_gt_ = cv::Mat(camera_height_, camera_width_, CV_64F, cv::Scalar(0));
+    event_image_right_polarity_ = cv::Mat(camera_height_, camera_width_, CV_8U, cv::Scalar(126));
     disparity_gt_right_  = cv::Mat(camera_height_, camera_width_, CV_64F, cv::Scalar(0));
 
     color_map_ = cv::Mat(camera_height_, camera_width_, CV_8U, cv::Scalar(0));
@@ -121,7 +117,11 @@ void DVSReadTxt::readFile()
                     event.ts = ros_ts;
                     event.x = x;
                     event.y = y;
-                    event.polarity = (bool)polarity;
+                    if ((bool)polarity){
+                        event.polarity = 255;
+                    }else{
+                        event.polarity = 0;
+                    }
                     left_events_.emplace_back(event);
                     left_disparity_values_.emplace_back(gt);
                 }
@@ -134,7 +134,11 @@ void DVSReadTxt::readFile()
                     event.ts = ros_ts;
                     event.x = x;
                     event.y = y;
-                    event.polarity = (bool)polarity;
+                    if ((bool)polarity){
+                        event.polarity = 255;
+                    }else{
+                        event.polarity = 0;
+                    }
                     right_events_.emplace_back(event);
                     right_disparity_values_.emplace_back(gt);
                 }
@@ -229,12 +233,10 @@ void DVSReadTxt::publishOnce(double start_time, double end_time)
     dvs_msgs::EventArray left_arr;
     dvs_msgs::EventArray right_arr;
 
-    event_image_left_polarity_.setTo(8);
-    event_image_left_.setTo(0);
+    event_image_left_polarity_.setTo(127);
     disparity_gt_left_.setTo(0);
 
-    event_image_right_polarity_.setTo(9);
-    event_image_right_.setTo(0);
+    event_image_right_polarity_.setTo(126);
     disparity_gt_right_.setTo(0);
 
     if (left_events_.size() > 1 && right_events_.size() > 1)
@@ -246,12 +248,14 @@ void DVSReadTxt::publishOnce(double start_time, double end_time)
             left_events_,
             left_disparity_values_,
             left_arr,
-            event_image_left_,
             event_image_left_polarity_,
             disparity_gt_left_,
             map1_x,
             map1_y);
         
+        // Apply Nearest Neighbor filtering
+        applyNearestNeighborFilter(event_image_left_polarity_, 127);
+
         readTimeSliceEventsVec(
             right_event_index_,
             start_time,
@@ -259,11 +263,13 @@ void DVSReadTxt::publishOnce(double start_time, double end_time)
             right_events_,
             right_disparity_values_,
             right_arr,
-            event_image_right_,
             event_image_right_polarity_,
             disparity_gt_right_,
             map2_x,
             map2_x);
+
+        // Apply Nearest Neighbor filtering
+        applyNearestNeighborFilter(event_image_right_polarity_, 126);
 
         publishGTDisparity(
             disparity_gt_left_,
@@ -274,9 +280,7 @@ void DVSReadTxt::publishOnce(double start_time, double end_time)
             img_pub_disparity_gt_right_);
 
         calcPublishDisparity(
-            event_image_left_,
             event_image_left_polarity_,
-            event_image_right_,
             event_image_right_polarity_,
             disparity_gt_left_,
             disparity_file_);
@@ -302,7 +306,6 @@ void DVSReadTxt::readTimeSliceEventsVec(
     std::vector<dvs_msgs::Event> &event_vector,
     std::vector<double> &disparity_vector,
     dvs_msgs::EventArray &event_arr,
-    cv::Mat &event_image,
     cv::Mat &event_image_polarity,
     cv::Mat &event_image_disp_gt,
     cv::Mat &map1_x,
@@ -311,7 +314,7 @@ void DVSReadTxt::readTimeSliceEventsVec(
     for (int i = start_index; i < event_vector.size(); i++)
     {
         dvs_msgs::Event tmp = event_vector.at(i);
-        double current_ts = tmp.ts.toSec();
+        double current_ts = tmp.ts.toSec() + (tmp.ts.toNSec() / 1e9);
         double disparity = disparity_vector.at(i);
 
         if (current_ts > start_time)
@@ -323,7 +326,6 @@ void DVSReadTxt::readTimeSliceEventsVec(
             int col = tmp.x;
             bool polarity = tmp.polarity;
 
-            event_image.at<double>(row, col) += 1;
             event_image_disp_gt.at<double>(row, col) = disparity;
             event_image_polarity.at<uchar>(row, col) = (uchar)polarity;
             if (current_ts > end_time)
@@ -334,13 +336,17 @@ void DVSReadTxt::readTimeSliceEventsVec(
         }
     }
 
-    // Nearest neighbour filter
+}
+
+void DVSReadTxt::applyNearestNeighborFilter(cv::Mat &event_image, int value_of_empty_cell)
+{
     auto start_time_NN = std::chrono::high_resolution_clock::now();
+    
     for (int y = NN_block_size_ / 2; y < event_image.rows - NN_block_size_ / 2; y++)
     {
         for (int x = NN_block_size_ / 2; x < event_image.cols - NN_block_size_ / 2; x++)
         {
-            if (event_image.at<double>(y, x) == 0)
+            if (event_image.at<uchar>(y, x) == value_of_empty_cell)
             {
                 continue; // skip processing
             }
@@ -352,14 +358,13 @@ void DVSReadTxt::readTimeSliceEventsVec(
                 {
                     for (int wx = -NN_block_size_ / 2; wx <= NN_block_size_ / 2; wx++)
                     {
-
                         // Skip the center pixel (the event we're checking)
                         if (wx == 0 && wy == 0)
                         {
                             continue;
                         }
 
-                        if (event_image.at<double>(y + wy, x + wx) != 0)
+                        if (event_image.at<uchar>(y + wy, x + wx) != value_of_empty_cell)
                         {
                             num_of_events++;
                             if (num_of_events == NN_min_num_of_events_)
@@ -375,12 +380,7 @@ void DVSReadTxt::readTimeSliceEventsVec(
 
                 if (noise) // remove that event
                 {
-                    event_image.at<double>(y, x) = 0;
-                    // std::cout << "Removed isolated event at, (" << x << "," << y << ")" << std::endl;
-                }
-                else
-                {
-                    // left_events_.emplace_back(msg->events[i]);
+                    event_image.at<uchar>(y, x) = value_of_empty_cell;
                 }
             }
         }
@@ -403,14 +403,12 @@ void DVSReadTxt::publishGTDisparity(cv::Mat &disparity_gt, image_transport::Publ
 }
 
 void DVSReadTxt::calcPublishDisparity(
-    cv::Mat &event_image_left,
     cv::Mat &event_image_polarity_left,
-    cv::Mat &event_image_right,
     cv::Mat &event_image_polarity_right,
     cv::Mat &left_gt_disparity,
     std::ofstream &file)
 {
-    cv::Mat disparity(event_image_left_.size(), CV_64F, cv::Scalar(0));
+    cv::Mat disparity(event_image_polarity_left.size(), CV_64F, cv::Scalar(0));
 
     if (!file.is_open())
     {
@@ -422,11 +420,11 @@ void DVSReadTxt::calcPublishDisparity(
     const int half_block = window_block_size_ / 2;
     const double total_pixel = window_block_size_ * window_block_size_;
 
-    for (int y = half_block; y < event_image_left.rows - half_block; y++)
+    for (int y = half_block; y < event_image_polarity_left.rows - half_block; y++)
     {
-        for (int x = half_block; x < event_image_left.cols - half_block; x++)
+        for (int x = half_block; x < event_image_polarity_left.cols - half_block; x++)
         {
-            if (event_image_left.at<double>(y, x) == 0)
+            if (event_image_polarity_left.at<uchar>(y, x) == 127)
             {
                 continue; // skip processing
             }
@@ -449,7 +447,7 @@ void DVSReadTxt::calcPublishDisparity(
                 double num_of_similar_pixels = 0;
                 double num_of_non_similar_pixels = 0;
 
-                // Compute SAD for the current disparity
+                // Compute costs for the current disparity
                 for (int wy = -half_block; wy <= half_block; wy++)
                 {
                     const uchar *left_row_ptr = event_image_polarity_left.ptr<uchar>(y + wy);
