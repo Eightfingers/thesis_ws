@@ -19,14 +19,9 @@ class DVSReadTxt
 {
 public:
     DVSReadTxt(ros::NodeHandle &nh, ros::NodeHandle p_nh);
-
-    void readFile();
-    void publishOnce(double start_time, double end_time);
-    void loopOnce();
-
     virtual ~DVSReadTxt();
 
-private:
+    void readFile();
     void readTimeSliceEventsVec(
         int &start_index,
         double start_time,
@@ -38,48 +33,60 @@ private:
         cv::Mat &event_image_disp_gt,
         cv::Mat &map1_x,
         cv::Mat &map1_y);
-
+    void applyNearestNeighborFilter(cv::Mat &event_image_pol, int value_of_empty_cell);
+    void createAdaptiveWindowMap(cv::Mat &event_image_pol,
+                                 cv::Mat &sobel_x,
+                                 cv::Mat &sobel_y,
+                                 cv::Mat &mean,
+                                 cv::Mat &mean_sq,
+                                 cv::Mat &gradient_sq,
+                                 cv::Mat &image_window_sizes);
     void publishGTDisparity(
         cv::Mat &disparity_gt,
         image_transport::Publisher &disparity_gt_image_pub);
-
     void calcPublishDisparity(
         cv::Mat &event_image_polarity_left,
         cv::Mat &event_image_polarity_right,
         cv::Mat &left_gt_disparity,
         std::ofstream &file);
+    void publishOnce(double start_time, double end_time);
+    void loopOnce();
 
-    void applyNearestNeighborFilter(cv::Mat &event_image_pol, int value_of_empty_cell);
-
-    void createAdaptiveWindowMap(cv::Mat &event_image_pol,
-                                        cv::Mat &sobel_x,
-                                        cv::Mat &sobel_y,
-                                        cv::Mat &mean,
-                                        cv::Mat &mean_sq,
-                                        cv::Mat &gradient_sq,
-                                        cv::Mat &image_window_sizes);
-
+private:
+    // ROS
     ros::NodeHandle nh_;
     ros::NodeHandle p_nh_;
 
     ros::Publisher left_event_arr_pub_;
     ros::Publisher right_event_arr_pub_;
 
+    image_transport::Publisher disparity_pub_;
+    image_transport::Publisher img_pub_disparity_gt_left_;
+    image_transport::Publisher img_pub_disparity_gt_right_;
+    image_transport::Publisher debug_image_pub_;
+    image_transport::Publisher rect_left_image_pub_;
+    image_transport::Publisher rect_right_image_pub_;
+
+    cv_bridge::CvImage gt_cv_image_;
+    cv_bridge::CvImage cv_image_disparity_;
+    cv_bridge::CvImage debug_image_;
+    cv_bridge::CvImage rect_left_image_;
+    cv_bridge::CvImage rect_right_image_;
+
+    // Storing Data
     std::vector<dvs_msgs::Event> left_events_;
     std::vector<dvs_msgs::Event> right_events_;
     std::vector<double> left_disparity_values_;
     std::vector<double> right_disparity_values_;
+    int left_event_index_ = 0; 
+    int right_event_index_ = 0;
 
+    // Loop and control rate
     std::chrono::time_point<std::chrono::high_resolution_clock> time_start_;
     std::chrono::high_resolution_clock::time_point loop_timer_;
-
-    image_transport::Publisher img_pub_disparity_gt_left_;
-    image_transport::Publisher img_pub_disparity_gt_right_;
-    image_transport::Publisher debug_image_pub_;
-
-    std::string left_event_csv_file_path_;
-    std::string right_event_csv_file_path_;
-    std::string event_txt_file_path_;
+    double loop_rate_;
+    double slice_start_time_;
+    double slice_end_time_;
 
     // Configs
     bool calc_disparity_ = false;
@@ -89,26 +96,20 @@ private:
     bool file_is_txt_ = false;
     bool write_to_text_ = false;
     bool do_adaptive_window_ = true;
+    bool rectify_ = false;
+
     int camera_height_;
     int camera_width_;
-    double loop_rate_;
-    double slice_start_time_;
-    double slice_end_time_;
 
+    // Nearest neighbour
     int NN_block_size_;
     int NN_min_num_of_events_;
-    int left_event_index_ = 0;
-    int right_event_index_ = 0;
 
+    // Adaptive Window
     int small_block_size_;
     int medium_block_size_;
     int large_block_size_;
 
-    cv_bridge::CvImage cv_image_;
-    cv_bridge::CvImage cv_image_disparity_;
-    cv_bridge::CvImage debug_image_;
-
-    image_transport::Publisher sad_disparity_pub_;
     int disparity_range_;   // Maximum disparity
     int window_block_size_; // window size (must be odd)
 
@@ -122,18 +123,10 @@ private:
     cv::Mat event_image_right_polarity_;
     cv::Mat disparity_gt_right_;
 
-    std::ofstream gt_disparity_left_file_;
-    std::ofstream gt_disparity_right_file_;
-    std::ofstream disparity_file_;
-
-    // Adaptive winmdow
+    // Adaptive window
     cv::Mat sobel_x_, sobel_y_, mean_, mean_sq_, gradient_sq_;
     cv::Mat window_size_map_;
     int threshold_edge_;
-
-    std::string gt_disparity_left_path_ = "gt_disparity_left.txt";
-    std::string gt_disparity_right_path_ = "gt_disparity_right.txt";
-    std::string disparity_path_ = "disparity_out_.txt";
 
     // Camera matrices (K) and distortion coefficients (dist)
     cv::Mat K_0 = (cv::Mat_<double>(3, 3) << 571.48555589, 0, 636.00644236,
@@ -155,4 +148,15 @@ private:
 
     // Rectification maps
     cv::Mat map1_x, map1_y, map2_x, map2_y;
+
+    // File Paths
+    std::ofstream gt_disparity_left_file_;
+    std::ofstream gt_disparity_right_file_;
+    std::ofstream disparity_file_;
+    std::string left_event_csv_file_path_;
+    std::string right_event_csv_file_path_;
+    std::string event_txt_file_path_;
+    std::string gt_disparity_left_path_ = "gt_disparity_left.txt"; 
+    std::string gt_disparity_right_path_ = "gt_disparity_right.txt"; 
+    std::string disparity_path_ = "disparity_out_.txt";
 };
