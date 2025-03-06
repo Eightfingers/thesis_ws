@@ -49,17 +49,20 @@ public:
         cv::Mat &event_image_polarity_right,
         cv::Mat &left_gt_disparity,
         std::ofstream &file);
+
+    void sparseRemap(cv::Mat &event_image, cv::Mat &remapped_image, cv::Mat &map1_x, cv::Mat &map1_y, int empty_pixel_value);
+
     void publishOnce(double start_time, double end_time);
     void loopOnce();
 
 private:
-    // ROS
+    // ROS Node Handles
     ros::NodeHandle nh_;
     ros::NodeHandle p_nh_;
 
+    // Publishers
     ros::Publisher left_event_arr_pub_;
     ros::Publisher right_event_arr_pub_;
-
     image_transport::Publisher disparity_pub_;
     image_transport::Publisher img_pub_disparity_gt_left_;
     image_transport::Publisher img_pub_disparity_gt_right_;
@@ -67,29 +70,29 @@ private:
     image_transport::Publisher rect_left_image_pub_;
     image_transport::Publisher rect_right_image_pub_;
 
+    // OpenCV Images
     cv_bridge::CvImage gt_cv_image_;
     cv_bridge::CvImage cv_image_disparity_;
     cv_bridge::CvImage debug_image_;
     cv_bridge::CvImage rect_left_image_;
     cv_bridge::CvImage rect_right_image_;
 
-    // Storing Data
+    // Event Data Storage
     std::vector<dvs_msgs::Event> left_events_;
     std::vector<dvs_msgs::Event> right_events_;
     std::vector<double> left_disparity_values_;
     std::vector<double> right_disparity_values_;
-    int left_event_index_ = 0; 
+    int left_event_index_ = 0;
     int right_event_index_ = 0;
 
-    // Loop and control rate
+    // Timing Control
     std::chrono::time_point<std::chrono::high_resolution_clock> time_start_;
     std::chrono::high_resolution_clock::time_point loop_timer_;
     double loop_rate_;
     double slice_start_time_;
     double slice_end_time_;
 
-    // Configs
-    bool calc_disparity_ = false;
+    // Configuration Flags
     bool first_loop_ = true;
     bool do_NN_ = false;
     bool publish_slice_ = false;
@@ -98,42 +101,47 @@ private:
     bool do_adaptive_window_ = true;
     bool rectify_ = false;
 
+    // Camera and Cropping Parameters
     int camera_height_;
     int camera_width_;
+    int crop_width = 1200;
+    int crop_height = 630;
+    int new_mid_x;
+    int new_mid_y;
 
-    // Nearest neighbour
+    // Algorithm Parameters
+    // Nearest Neighbour
     int NN_block_size_;
     int NN_min_num_of_events_;
-
     // Adaptive Window
     int small_block_size_;
     int medium_block_size_;
     int large_block_size_;
+    int threshold_edge_;
+    // Search range
+    int disparity_range_;
 
-    int disparity_range_;   // Maximum disparity
-    int window_block_size_; // window size (must be odd)
-
-    cv::Mat disparity_;
-    cv::Mat event_disparity_;
+    // Image Processing Matrices
     cv::Mat color_map_;
-
     cv::Mat event_image_left_polarity_;
+    cv::Mat event_image_left_polarity_remmaped_;
     cv::Mat disparity_gt_left_;
-
     cv::Mat event_image_right_polarity_;
+    cv::Mat event_image_right_polarity_remmaped_;
     cv::Mat disparity_gt_right_;
 
-    // Adaptive window
+    // Adaptive window Matrices
     cv::Mat sobel_x_, sobel_y_, mean_, mean_sq_, gradient_sq_;
     cv::Mat window_size_map_;
-    int threshold_edge_;
 
     // Camera matrices (K) and distortion coefficients (dist)
+    // k_0, dist_0 is master (left)
     cv::Mat K_0 = (cv::Mat_<double>(3, 3) << 571.48555589, 0, 636.00644236,
                    0, 572.41991416, 357.83088501,
                    0, 0, 1);
     cv::Mat dist_0 = (cv::Mat_<double>(1, 4) << -0.02343015, 0.04860866, -0.00181647, 0.00308489);
 
+    // K_1, dist_1 is slave (right)
     cv::Mat K_1 = (cv::Mat_<double>(3, 3) << 570.9912814, 0, 664.05891687,
                    0, 571.99822399, 351.11646702,
                    0, 0, 1);
@@ -145,8 +153,6 @@ private:
 
     // Stereo rectification variables
     cv::Mat R1, R2, P1, P2, Q;
-
-    // Rectification maps
     cv::Mat map1_x, map1_y, map2_x, map2_y;
 
     // File Paths
