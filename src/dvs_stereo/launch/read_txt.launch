@@ -18,8 +18,8 @@
 
   <!-- <param name="window_step" type="int" value="2" />
   <param name="window_fill_size" type="int" value="1" /> -->
-  <param name="window_step" type="int" value="4" />
-  <param name="window_fill_size" type="int" value="3" />
+  <param name="window_step" type="int" value="3" />
+  <param name="window_fill_size" type="int" value="2" />
 
   <param name="nearest_neighbour" type="bool" value="true" />
   <param name="NN_min_num_of_events" type="int" value="5" />

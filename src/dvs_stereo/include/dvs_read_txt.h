@@ -31,15 +31,22 @@ public:
 private:
     void readEventArray(
         dvs_msgs::EventArray &event_array,
-        cv::Mat &event_image,
         cv::Mat &event_image_polarity,
         cv::Mat &map1_x,
         cv::Mat &map1_y);
 
+    void applyNearestNeighborFilter(cv::Mat &event_image_pol, int value_of_empty_cell);
+
+    void createAdaptiveWindowMap(cv::Mat &event_image_pol,
+        cv::Mat &sobel_x,
+        cv::Mat &sobel_y,
+        cv::Mat &mean,
+        cv::Mat &mean_sq,
+        cv::Mat &gradient_sq,
+        cv::Mat &image_window_sizes);
+
     void calcPublishDisparity(
-        cv::Mat &event_image_left,
         cv::Mat &event_image_polarity_left,
-        cv::Mat &event_image_right,
         cv::Mat &event_image_polarity_right);
 
     void syncCallback(const dvs_msgs::EventArray::ConstPtr &msg1, const dvs_msgs::EventArray::ConstPtr &msg2);
@@ -76,6 +83,8 @@ private:
     bool do_NN_ = false;
     bool publish_slice_;
     bool write_to_text_ = false;
+    bool do_adaptive_window_ = true;
+
     int camera_height_ ;
     int camera_width_ ;
     int disparity_step_;
@@ -86,11 +95,23 @@ private:
     int NN_min_num_of_events_;  
     int left_event_index_ = 0;
     int right_event_index_ = 0;
+    int left_empty_pixel_val_ = 127;
+    int right_empty_pixel_val_ = 126;
+
+    int crop_width = 1200;
+    int crop_height = 630;
+    int new_mid_x;
+    int new_mid_y;
+
+    // Adaptive Window
+    int small_block_size_;
+    int medium_block_size_;
+    int large_block_size_;
+    int threshold_edge_;
 
     double age_penalty_;
     int msg_queue_size_;
 
-    // SAD algorithm stuff
     cv_bridge::CvImage cv_image_disparity_;
     image_transport::Publisher estimated_disparity_pub_;
     int disparity_range_ ; // Maximum disparity
@@ -101,15 +122,21 @@ private:
     cv::Mat event_disparity_;
 
     cv::Mat event_image_left_;
+    cv::Mat event_image_left_polarity_remmaped_;
     cv::Mat event_image_left_polarity_;
     
     cv::Mat event_image_right_;
+    cv::Mat event_image_right_polarity_remmaped_;
     cv::Mat event_image_right_polarity_;
     cv::Mat disparity_color_map_;
 
     std::ofstream gt_disparity_left_file_;
     std::ofstream gt_disparity_right_file_;
     std::ofstream estimated_disparity_file_;
+
+    // Adaptive window Matrices
+    cv::Mat sobel_x_, sobel_y_, mean_, mean_sq_, gradient_sq_;
+    cv::Mat window_size_map_;
 
     std::string estimated_disparity_path_ = "SAD_disparity_.txt";
 

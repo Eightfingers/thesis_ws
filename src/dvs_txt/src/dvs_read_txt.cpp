@@ -384,9 +384,9 @@ void DVSReadTxt::createAdaptiveWindowMap(cv::Mat &event_image_pol,
     tmp.copyTo(debug_image_.image);
     debug_image_pub_.publish(debug_image_.toImageMsg());
 
-    for (int i = 0; i < image_window_sizes.rows; i++)
+    for (int i = 0; i < event_image_pol.rows; i++)
     {
-        for (int j = 0; j < image_window_sizes.cols; j++)
+        for (int j = 0; j < event_image_pol.cols; j++)
         {
             if (event_image_pol.at<uchar>(i, j) == 127)
             {
@@ -435,7 +435,6 @@ void DVSReadTxt::calcPublishDisparity(
     double total_pixel = large_block_size_ * large_block_size_;
     int total_rows = event_image_polarity_left.rows - half_block -1;
     int total_cols = event_image_polarity_left.cols - half_block -1;
-
 
     for (int y = half_block; y < total_rows; y++)
     {
