@@ -20,8 +20,8 @@ DVSStereo::DVSStereo(ros::NodeHandle &nh, ros::NodeHandle nh_private) : nh_(nh),
     nh_private.param<bool>("nearest_neighbour", do_NN_, false);
     nh_private.param<bool>("write_to_text", write_to_text_, false);
     nh_private.param<bool>("calc_disparity", calc_disparity_, false);
-
     nh_private.param<bool>("do_adaptive_window", do_adaptive_window_, true);
+
     nh_private.param<int>("small_block_size", small_block_size_, 7);
     nh_private.param<int>("medium_block_size", medium_block_size_, 9);
     nh_private.param<int>("large_block_size", large_block_size_, 11);
@@ -95,8 +95,9 @@ DVSStereo::~DVSStereo()
 void DVSStereo::publishOnce(double start_time, double end_time)
 {
     event_image_left_polarity_.setTo(left_empty_pixel_val_);
-    event_image_right_polarity_.setTo(right_empty_pixel_val_);
     event_image_left_polarity_remmaped_.setTo(left_empty_pixel_val_);
+
+    event_image_right_polarity_.setTo(right_empty_pixel_val_);
     event_image_right_polarity_remmaped_.setTo(right_empty_pixel_val_);
 
     // Read, Write & Publish disparity ground truth values of the specified time slice
@@ -241,7 +242,7 @@ void DVSStereo::createAdaptiveWindowMap(cv::Mat &event_image_pol, cv::Mat &sobel
     {
         for (int j = 0; j < event_image_pol.cols; j++)
         {
-            if (event_image_pol.at<uchar>(i, j) == 127)
+            if (event_image_pol.at<uchar>(i, j) == left_empty_pixel_val_)
             {
                 continue; // skip processing
             }
@@ -412,34 +413,6 @@ void DVSStereo::loopOnce()
 
 void DVSStereo::getSuitableSlice(dvs_msgs::EventArray &event_array, double start_time, double end_time)
 {
-
-    // // Slice front events
-    // int size = event_array.events.size();
-    // for (int i = 0; i < size; i++)
-    // {
-    //     dvs_msgs::Event tmp = event_array.events.at(i);
-    //     double current_ts = tmp.ts.toSec() + (tmp.ts.toNSec() / 1e9);
-    //     if (current_ts > start_time)
-    //     {
-    //         // exit loop as this event has exceeded end time
-    //         event_array.events.erase(event_array.events.begin(), event_array.events.begin() + i);
-    //         break;
-    //     }
-    // }
-
-    // int new_size = event_array.events.size();
-    // for (int j = new_size - 1; j >= 0; --j)
-    // {
-    //     dvs_msgs::Event tmp = event_array.events.at(j);
-    //     double current_ts = tmp.ts.toSec() + (tmp.ts.toNSec() / 1e9);
-
-    //     if (current_ts < end_time)
-    //     {
-    //         event_array.events.erase(event_array.events.begin() + j, event_array.events.begin() + new_size);
-    //         break;
-    //     }
-    // }
-
     auto &events = event_array.events;
     int original_size = events.size(); // Store the original size
 

@@ -12,6 +12,8 @@
 
   <param name="write_to_text" type="bool" value="false" />
   <param name="calc_disparity" type="bool" value="true" />
+  <param name="do_adaptive_window" type="bool" value="true" />
+
   <param name="disparity_range" type="int" value="128" />
   <param name="disparity_step" type="int" value="2" />
   <param name="window_block_size" type="int" value="13" />
