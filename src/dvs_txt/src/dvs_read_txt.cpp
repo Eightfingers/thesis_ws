@@ -507,14 +507,19 @@ void DVSReadTxt::calcPublishDisparity(
                     {
                         int left_polarity = event_image_polarity_left.at<uchar>(y + wy, x + wx);
                         int right_polarity = event_image_right_polarity_.at<uchar>(y + wy, x + wx - d);
-                        if ((right_polarity != left_polarity))
+                        // if (left_polarity != right_polarity)
+                        // {
+                        //     num_of_non_similar_pixels++;
+                        // }
+
+                        if (left_polarity != left_empty_pixel_val_ && right_polarity != right_empty_pixel_val_ )
                         {
                             num_of_non_similar_pixels++;
                         }
                     }
                 }
 
-                cost = num_of_non_similar_pixels / total_pixel;
+                cost = (total_pixel - num_of_non_similar_pixels) / total_pixel;
                 // if (y == 14 && x == 56)
                 // {
                 //     std::cout << "cost:" << cost << ", num_of_non_similar_pixels:" << num_of_non_similar_pixels << ", total_pixel" << total_pixel << std::endl;
