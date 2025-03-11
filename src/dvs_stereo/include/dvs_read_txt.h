@@ -1,5 +1,7 @@
 #pragma once
 
+#define DEBUG_MODE
+
 #include <ros/ros.h>
 #include <dvs_msgs/EventArray.h>
 #include <dvs_msgs/Event.h>
@@ -66,11 +68,8 @@ private:
     typedef message_filters::Synchronizer<MySyncPolicy> Sync;
     boost::shared_ptr<Sync> sync_;
 
-    std::vector<dvs_msgs::Event> left_events_;
-    std::vector<dvs_msgs::Event> right_events_;
-
-    dvs_msgs::EventArray left_events_2;
-    dvs_msgs::EventArray right_events_2;
+    dvs_msgs::EventArray left_events_;
+    dvs_msgs::EventArray right_events_;
 
     std::chrono::time_point<std::chrono::high_resolution_clock> time_start_;
     std::chrono::high_resolution_clock::time_point loop_timer_;

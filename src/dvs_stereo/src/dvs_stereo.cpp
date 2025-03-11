@@ -12,11 +12,14 @@ using std::chrono::duration_cast;
 using std::chrono::high_resolution_clock;
 using std::chrono::milliseconds;
 
+// #define DEBUG_MODE  // Uncomment this line to enable debug messages
+
 DVSStereo::DVSStereo(ros::NodeHandle &nh, ros::NodeHandle nh_private) : nh_(nh), p_nh_(nh_private)
 {
 
     nh_private.param<int>("camera_height", camera_height_, 11);
     nh_private.param<int>("camera_width", camera_width_, 11);
+
     nh_private.param<bool>("nearest_neighbour", do_NN_, false);
     nh_private.param<bool>("write_to_text", write_to_text_, false);
     nh_private.param<bool>("calc_disparity", calc_disparity_, false);
@@ -47,9 +50,6 @@ DVSStereo::DVSStereo(ros::NodeHandle &nh, ros::NodeHandle nh_private) : nh_(nh),
     sync_->registerCallback(boost::bind(&DVSStereo::syncCallback, this, _1, _2));
     // sync_->setAgePenalty(age_penalty_);  // Reduce age penalty (100 microseconds)
     // sync_->setMaxIntervalDuration(ros::Duration(0.010));  // 10 millisecond tolerance
-
-    std::cout << "NN_min_num_of_events_.. " << NN_min_num_of_events_ << std::endl;
-    std::cout << "Do NN.. " << do_NN_ << std::endl;
 
     image_transport::ImageTransport it_(nh);
     estimated_disparity_pub_ = it_.advertise("left_disparity", 1);
@@ -84,7 +84,13 @@ DVSStereo::DVSStereo(ros::NodeHandle &nh, ros::NodeHandle nh_private) : nh_(nh),
     new_mid_x = (event_image_left_polarity_.cols - crop_width) / 2;  // Center horizontally
     new_mid_y = (event_image_left_polarity_.rows - crop_height) / 2; // Center vertically
 
-    std::cout << "Finished init! " << std::endl;
+    #ifdef DEBUG_MODE
+    ROS_INFO("NN_min_num_of_events_: %d", NN_min_num_of_events_);
+    ROS_INFO("Do NN: %s", do_NN_ ? "true" : "false");
+    ROS_INFO("Do calc disparity: %s", calc_disparity_ ? "true" : "false");
+    ROS_INFO("Do adaptive window?: %s", do_adaptive_window ? "true" : "false");
+    ROS_INFO("Finished init!");
+    #endif
     loop_timer_ = high_resolution_clock::now();
 }
 
@@ -105,12 +111,12 @@ void DVSStereo::publishOnce(double start_time, double end_time)
     // Read, Write & Publish disparity ground truth values of the specified time slice
     auto start_time_read = std::chrono::high_resolution_clock::now();
 
-    readEventArray(left_events_2,
+    readEventArray(left_events_,
                    event_image_left_polarity_,
                    map1_x,
                    map1_y);
 
-    readEventArray(right_events_2,
+    readEventArray(right_events_,
                    event_image_right_polarity_,
                    map2_x,
                    map2_y);
@@ -155,18 +161,19 @@ void DVSStereo::publishOnce(double start_time, double end_time)
 
 void DVSStereo::readEventArray(dvs_msgs::EventArray &event_array, cv::Mat &event_image_polarity, cv::Mat &map1_x, cv::Mat &map1_y)
 {
-    for (int i = 0; i < event_array.events.size(); i++)
+    const size_t num_events = event_array.events.size();
+    for (int i = 0; i < num_events; i++)
     {
-        dvs_msgs::Event tmp = event_array.events.at(i);
-        double current_ts = tmp.ts.toSec() + (tmp.ts.toNSec() * 1e-9);
-        int row = tmp.y;
-        int col = tmp.x;
-        bool polarity = tmp.polarity;
-
-        event_image_polarity.at<uchar>(row, col) = (uchar)polarity;
+        const dvs_msgs::Event& tmp = event_array.events[i]; 
+        
+        if (tmp.polarity){
+            event_image_polarity.at<uchar>(tmp.y, tmp.x) = 255;
+        }
+        else
+        {
+            event_image_polarity.at<uchar>(tmp.y, tmp.x) = 0;
+        }
     }
-
-    auto start_time_NN = std::chrono::high_resolution_clock::now();
 }
 
 void DVSStereo::applyNearestNeighborFilter(cv::Mat &event_image_pol, int value_of_empty_cell)
@@ -221,7 +228,9 @@ void DVSStereo::applyNearestNeighborFilter(cv::Mat &event_image_pol, int value_o
 
     auto end_time_NN = std::chrono::high_resolution_clock::now();
     auto duration_NN = std::chrono::duration_cast<std::chrono::microseconds>(end_time_NN - start_time_NN);
-    std::cout << "Nearest neighbor filtering took: " << duration_NN.count() / 1000.0 << " milliseconds" << std::endl;
+    #ifdef DEBUG_MODE
+    ROS_INFO("Nearest neighbor filtering took: %.2f milliseconds", duration_NN.count() / 1000.0);
+    #endif
 }
 
 void DVSStereo::createAdaptiveWindowMap(cv::Mat &event_image_pol, cv::Mat &sobel_x, cv::Mat &sobel_y, cv::Mat &mean, cv::Mat &mean_sq, cv::Mat &gradient_sq, cv::Mat &image_window_sizes)
@@ -302,16 +311,17 @@ void DVSStereo::calcPublishDisparity(
                 double sad = 0;
                 double num_of_non_similar_pixels = 0;
 
+                if (x - half_block - d < 0)
+                {
+                    continue; // Skip
+                }
+
                 // Window for the current disparity
                 for (int wy = -half_block; wy <= half_block; wy++)
                 {
                     for (int wx = -half_block; wx <= half_block; wx++)
                     {
 
-                        if (x + wx - d < 0)
-                        {
-                            continue; // Skip
-                        }
         
                         int left_polarity = event_image_polarity_left.at<uchar>(y + wy, x + wx);
                         int right_polarity = event_image_right_polarity_.at<uchar>(y + wy, x + wx - d);
@@ -353,7 +363,9 @@ void DVSStereo::calcPublishDisparity(
 
     auto end_time_disp = std::chrono::high_resolution_clock::now();
     auto duration_disp = std::chrono::duration_cast<std::chrono::microseconds>(end_time_disp - start_time_disp);
-    std::cout << "Disp estimation took: " << duration_disp.count() / 1000.0 << " milliseconds" << std::endl;
+    #ifdef DEBUG_MODE
+    ROS_INFO("Disp estimation took: %.2f milliseconds", duration_disp.count() / 1000.0);
+    #endif
 
     disparity.convertTo(disparity, CV_8U);                                // Convert from 64F to 8U
     cv::applyColorMap(disparity, disparity_color_map_, cv::COLORMAP_JET); // convert to colour map
@@ -369,24 +381,20 @@ void DVSStereo::syncCallback(const dvs_msgs::EventArray::ConstPtr &msg1, const d
         return;
     }
 
-    left_events_2 = *msg1;
-    right_events_2 = *msg2;
-    
-    ROS_INFO("Received %lu left events and %lu right events",
-        left_events_2.events.size(), right_events_2.events.size());
+    left_events_ = *msg1;
+    right_events_ = *msg2;
 
-
-    double left_ts = left_events_2.header.stamp.toSec() + (left_events_2.header.stamp.toNSec() / 1e9);
-    double right_ts = right_events_2.header.stamp.toSec() + (right_events_2.header.stamp.toNSec() / 1e9);
+    double left_ts = left_events_.header.stamp.toSec() + (left_events_.header.stamp.toNSec() / 1e9);
+    double right_ts = right_events_.header.stamp.toSec() + (right_events_.header.stamp.toNSec() / 1e9);
     double diff = std::abs(left_ts - right_ts) * 1000;
 
-    dvs_msgs::Event left_start = left_events_2.events.front();
-    dvs_msgs::Event left_end = left_events_2.events.back();
+    dvs_msgs::Event left_start = left_events_.events.front();
+    dvs_msgs::Event left_end = left_events_.events.back();
     double left_start_ts_ = left_start.ts.toSec() + (left_start.ts.toNSec() / 1e9);
     double left_end_ts_ = left_end.ts.toSec() + (left_end.ts.toNSec() / 1e9);
 
-    dvs_msgs::Event right_start = right_events_2.events.front();
-    dvs_msgs::Event right_end = right_events_2.events.back();
+    dvs_msgs::Event right_start = right_events_.events.front();
+    dvs_msgs::Event right_end = right_events_.events.back();
     double right_start_ts_ = right_start.ts.toSec() + (right_start.ts.toNSec() / 1e9);
     double right_end_ts_ = right_end.ts.toSec() + (right_end.ts.toNSec() / 1e9);
 
@@ -396,32 +404,38 @@ void DVSStereo::syncCallback(const dvs_msgs::EventArray::ConstPtr &msg1, const d
 
     if (!(common_start < common_end))
     {
-        std::cout << "!!!!!!!!!!!!!!!!!!!!!No common slice found!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << std::endl;
+        ROS_WARN("No common time slice found!");
         return;
     }
 
-    std::cout << "Timestamp left_event = " << left_ts << " , Timestamp Right event = " << right_ts << ", difference: " << diff << "ms" << std::endl;
-    std::cout << "left_start_ts_ = " << left_start_ts_ << " , left_end = " << left_end_ts_ << std::endl;
-    std::cout << "right_start_ts_ = " << right_start_ts_ << " , right_end_ts_ = " << right_end_ts_ << std::endl;
-    std::cout << "common_start: " << common_start << ", common_end:" << common_end << ", common_time_slice:" << common_time_slice << std::endl;
+    #ifdef DEBUG_MODE
+    ROS_INFO("Received %lu left events and %lu right events",
+        left_events_.events.size(), right_events_.events.size());
+    ROS_INFO("Timestamp left_event = %.6f, Timestamp Right event = %.6f, difference: %.2fms", 
+             left_ts, right_ts, diff);
+    ROS_INFO("left_start_ts_ = %.6f, left_end = %.6f", left_start_ts_, left_end_ts_);
+    ROS_INFO("right_start_ts_ = %.6f, right_end_ts_ = %.6f", right_start_ts_, right_end_ts_);
+    ROS_INFO("common_start: %.6f, common_end: %.6f, common_time_slice: %.6f", 
+             common_start, common_end, common_time_slice);
+    #endif
 
     auto algo_start = high_resolution_clock::now();
 
-    getSuitableSlice(left_events_2, common_start, common_end);
-    getSuitableSlice(right_events_2, common_start, common_end);
+    getSuitableSlice(left_events_, common_start, common_end);
+    getSuitableSlice(right_events_, common_start, common_end);
     publishOnce(0, 1);
 
     // loop_timer_ = t;
     auto algo_end = high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(algo_end - algo_start);
 
-    // std::cout << "Algorithm execution time: " << duration.count() / 1000.0 << " milliseconds" << std::endl;
-    // std::cout << "Left event size: " << left_events_2.events.size() << " , Right event size: " << right_events_2.events.size() << std::endl;
+    ROS_INFO("Algorithm execution time: %f ms, right event size: %lu, left event size: %lu",
+        duration.count() / 1000.0, left_events_.events.size(), right_events_.events.size());
 }
 
 void DVSStereo::loopOnce()
 {
-    if (left_events_2.events.size() > 1 && right_events_2.events.size() > 1)
+    if (left_events_.events.size() > 1 && right_events_.events.size() > 1)
     {
         auto algo_start = high_resolution_clock::now();
 
@@ -430,8 +444,11 @@ void DVSStereo::loopOnce()
         auto algo_end = high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(algo_end - algo_start);
 
-        std::cout << "Algorithm execution time: " << duration.count() / 1000.0 << " milliseconds" << std::endl;
-        std::cout << "Left event size: " << left_events_2.events.size() << " , Right event size: " << right_events_2.events.size() << std::endl;
+        #ifdef DEBUG_MODE
+        ROS_INFO("Algorithm execution time: %.2f milliseconds", duration.count() / 1000.0);
+        ROS_INFO("Left event size: %lu, Right event size: %lu", 
+                 left_events_.events.size(), right_events_.events.size());
+        #endif
     }
 }
 
@@ -464,5 +481,7 @@ void DVSStereo::getSuitableSlice(dvs_msgs::EventArray &event_array, double start
 
     // Total number of erased events
     int total_erased = front_erased + back_erased;
-    std::cout << "Total events erased: " << total_erased << std::endl;
+    #ifdef DEBUG_MODE
+    ROS_INFO("Total number of events erased: %d", total_erased);
+    #endif
 }
