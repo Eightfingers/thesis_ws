@@ -329,11 +329,11 @@ void DVSReadTxt::applyNearestNeighborFilter(cv::Mat &event_image_pol, int value_
 {
     auto start_time_NN = std::chrono::high_resolution_clock::now();
 
-    int final_row = event_image_pol.rows - 1;
-    int final_col = event_image_pol.cols - 1;
-    for (int y = NN_block_size_ / 2; y < final_row - NN_block_size_ / 2; y++)
+    int final_row = event_image_pol.rows - NN_block_size_ - 1;
+    int final_col = event_image_pol.cols - NN_block_size_ - 1;
+    for (int y = NN_block_size_ / 2; y < final_row  / 2; y++)
     {
-        for (int x = NN_block_size_ / 2; x < final_col - NN_block_size_ / 2; x++)
+        for (int x = NN_block_size_ / 2; x < final_col  / 2; x++)
         {
             if (event_image_pol.at<uchar>(y, x) == value_of_empty_cell)
             {

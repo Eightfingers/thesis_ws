@@ -100,6 +100,8 @@ void DVSStereo::publishOnce(double start_time, double end_time)
     event_image_right_polarity_.setTo(right_empty_pixel_val_);
     event_image_right_polarity_remmaped_.setTo(right_empty_pixel_val_);
 
+    window_size_map_.setTo(0);
+
     // Read, Write & Publish disparity ground truth values of the specified time slice
     auto start_time_read = std::chrono::high_resolution_clock::now();
 
@@ -263,13 +265,14 @@ void DVSStereo::calcPublishDisparity(
     cv::Mat &event_image_polarity_left,
     cv::Mat &event_image_polarity_right)
 {
+
     cv::Mat disparity(event_image_polarity_left.size(), CV_64F, cv::Scalar(0));
 
     // Window-based disparity calculation
     auto start_time_disp = std::chrono::high_resolution_clock::now();
 
-    int half_block = window_block_size_ / 2;
-    double total_pixel = window_block_size_ * window_block_size_;
+    int half_block = large_block_size_ / 2;
+    double total_pixel = large_block_size_ * large_block_size_;
 
     int total_rows = event_image_polarity_left.rows - half_block - 1;
     int total_cols = event_image_polarity_left.cols - half_block - 1;
@@ -296,7 +299,6 @@ void DVSStereo::calcPublishDisparity(
             // Compare blocks at different disparities
             for (int d = 0; d < disparity_range_; d += disparity_step_)
             {
-
                 double sad = 0;
                 double num_of_non_similar_pixels = 0;
 
@@ -305,17 +307,29 @@ void DVSStereo::calcPublishDisparity(
                 {
                     for (int wx = -half_block; wx <= half_block; wx++)
                     {
+
+                        if (x + wx - d < 0)
+                        {
+                            continue; // Skip
+                        }
+        
                         int left_polarity = event_image_polarity_left.at<uchar>(y + wy, x + wx);
                         int right_polarity = event_image_right_polarity_.at<uchar>(y + wy, x + wx - d);
-                        if ((right_polarity != left_polarity))
+                        // if ((right_polarity != left_polarity))
+                        // {
+                        //     num_of_non_similar_pixels++;
+                        // }
+
+
+                        if (left_polarity != left_empty_pixel_val_ && right_polarity != right_empty_pixel_val_ )
                         {
                             num_of_non_similar_pixels++;
                         }
                     }
                 }
 
-                sad = num_of_non_similar_pixels / total_pixel;
-
+                // sad = num_of_non_similar_pixels / total_pixel;
+                sad = (total_pixel - num_of_non_similar_pixels) / total_pixel;
                 if (sad < min_sad)
                 {
                     min_sad = sad;
@@ -349,8 +363,18 @@ void DVSStereo::calcPublishDisparity(
 
 void DVSStereo::syncCallback(const dvs_msgs::EventArray::ConstPtr &msg1, const dvs_msgs::EventArray::ConstPtr &msg2)
 {
+
+    if (msg1->events.empty() || msg2->events.empty()) {
+        ROS_WARN("One or both DVS event arrays are empty!");
+        return;
+    }
+
     left_events_2 = *msg1;
     right_events_2 = *msg2;
+    
+    ROS_INFO("Received %lu left events and %lu right events",
+        left_events_2.events.size(), right_events_2.events.size());
+
 
     double left_ts = left_events_2.header.stamp.toSec() + (left_events_2.header.stamp.toNSec() / 1e9);
     double right_ts = right_events_2.header.stamp.toSec() + (right_events_2.header.stamp.toNSec() / 1e9);

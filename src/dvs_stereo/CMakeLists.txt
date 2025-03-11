@@ -1,10 +1,14 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(dvs_stereo)
 
+
 find_package(catkin_simple REQUIRED)
 catkin_simple(ALL_DEPS_REQUIRED)
 
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -O3")
+set(CMAKE_BUILD_TYPE Debug)  # Explicitly set Debug mode
+
+SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -std=c++11 -g -O0")  # Enable debug symbols and disable optimizations
+# SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -O3")
 
 find_package(OpenCV REQUIRED)
 

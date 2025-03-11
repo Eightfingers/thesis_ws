@@ -120,6 +120,7 @@ private:
     int window_fill_size_;
 
     cv::Mat event_disparity_;
+    cv::Mat disparity;
 
     cv::Mat event_image_left_;
     cv::Mat event_image_left_polarity_remmaped_;

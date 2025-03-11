@@ -12,7 +12,8 @@
 
   <param name="write_to_text" type="bool" value="false" />
   <param name="calc_disparity" type="bool" value="true" />
-  <param name="do_adaptive_window" type="bool" value="true" />
+  <param name="do_adaptive_window" type="bool" value="false" />
+  <param name="nearest_neighbour" type="bool" value="true" />
 
   <param name="disparity_range" type="int" value="128" />
   <param name="disparity_step" type="int" value="2" />
@@ -23,9 +24,12 @@
   <param name="window_step" type="int" value="3" />
   <param name="window_fill_size" type="int" value="2" />
 
-  <param name="nearest_neighbour" type="bool" value="true" />
-  <param name="NN_min_num_of_events" type="int" value="5" />
+  <param name="NN_min_num_of_events" type="int" value="3" />
   <param name="NN_block_size" type="int" value="10" />
+
+  <param name="small_block_size" type="int" value="5" />
+  <param name="medium_block_size" type="int" value="11" />
+  <param name="large_block_size" type="int" value="13" />
 
   </node>
 
