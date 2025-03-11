@@ -88,7 +88,7 @@ DVSStereo::DVSStereo(ros::NodeHandle &nh, ros::NodeHandle nh_private) : nh_(nh),
     ROS_INFO("NN_min_num_of_events_: %d", NN_min_num_of_events_);
     ROS_INFO("Do NN: %s", do_NN_ ? "true" : "false");
     ROS_INFO("Do calc disparity: %s", calc_disparity_ ? "true" : "false");
-    ROS_INFO("Do adaptive window?: %s", do_adaptive_window ? "true" : "false");
+    ROS_INFO("Do adaptive window?: %s", do_adaptive_window_ ? "true" : "false");
     ROS_INFO("Finished init!");
     #endif
     loop_timer_ = high_resolution_clock::now();
@@ -308,21 +308,19 @@ void DVSStereo::calcPublishDisparity(
             // Compare blocks at different disparities
             for (int d = 0; d < disparity_range_; d += disparity_step_)
             {
-                double sad = 0;
-                double num_of_non_similar_pixels = 0;
-
                 if (x - half_block - d < 0)
                 {
                     continue; // Skip
                 }
+
+                double cost = 0;
+                double num_of_non_similar_pixels = 0;
 
                 // Window for the current disparity
                 for (int wy = -half_block; wy <= half_block; wy++)
                 {
                     for (int wx = -half_block; wx <= half_block; wx++)
                     {
-
-        
                         int left_polarity = event_image_polarity_left.at<uchar>(y + wy, x + wx);
                         int right_polarity = event_image_right_polarity_.at<uchar>(y + wy, x + wx - d);
                         // if ((right_polarity != left_polarity))
@@ -338,11 +336,11 @@ void DVSStereo::calcPublishDisparity(
                     }
                 }
 
-                // sad = num_of_non_similar_pixels / total_pixel;
-                sad = (total_pixel - num_of_non_similar_pixels) / total_pixel;
-                if (sad < min_sad)
+                // cost = num_of_non_similar_pixels / total_pixel;
+                cost = (total_pixel - num_of_non_similar_pixels) / total_pixel;
+                if (cost < min_sad)
                 {
-                    min_sad = sad;
+                    min_sad = cost;
                     best_disparity = d;
                 }
             }
