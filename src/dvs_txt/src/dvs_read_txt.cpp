@@ -289,7 +289,6 @@ void DVSReadTxt::readTimeSliceEventsVec(
             //     found = true;
             // }
             
-            
             // found the time start
             event_arr.events.emplace_back(tmp);
 
@@ -447,26 +446,11 @@ void DVSReadTxt::calcPublishDisparity(
         std::cerr << "Error: Unable to open disparity file for writing!" << std::endl;
     }
 
-    int num_of_polarities = 0;
-    int wtf = 0;
-
     int half_block = large_block_size_ / 2;
     double total_pixel = large_block_size_ * large_block_size_;
     int total_rows = event_image_polarity_left.rows - half_block -1;
     int total_cols = event_image_polarity_left.cols - half_block -1;
-
-    // for (int y = 0; y < event_image_polarity_left.rows; y++)
-    // {
-    //     for (int x = 0; x < event_image_polarity_left.cols; x++)
-    //     {
-    //         if (event_image_polarity_left.at<uchar>(y, x) == left_empty_pixel_val_)
-    //         {
-    //             continue; // skip processing
-    //         }
-    //         num_of_polarities ++;
-    //     }
-    // }
-
+    
     for (int y = half_block; y < total_rows; y++)
     {
         for (int x = half_block; x < total_cols; x++)
@@ -542,20 +526,12 @@ void DVSReadTxt::calcPublishDisparity(
                 file << y << "," << x << "," << best_disparity << "," << gt_disparity << "," << min_cost << "\n";
                 disparity.at<double>(y, x) = (best_disparity * 255 / disparity_range_);
             }
-            // else
-            // {
-            //     std::cout << "best_disparity:" << best_disparity << " at: " << y << "," << x << std::endl;
-            //     wtf++;
-            // }
         }
     }
 
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
     std::cout << "Disp calculation took: " << duration.count() / 1000.0 << " milliseconds" << std::endl;
-
-    // std::cout << "num of polarities: " << num_of_polarities << std::endl;
-    // std::cout << "wtf: " << wtf << std::endl;
 
     disparity.convertTo(disparity, CV_8U);                      // Convert from 64F to 8U
     cv::applyColorMap(disparity, color_map_, cv::COLORMAP_JET); // convert to colour map

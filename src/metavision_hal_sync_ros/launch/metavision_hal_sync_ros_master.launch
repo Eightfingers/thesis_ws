@@ -10,9 +10,9 @@
     <param name="mode_slave" type="bool" value="false" />
     <param name="fps" type="int" value="30" />
     
-    <param name="bias_diff_off" type="int" value="190" />
-    <param name="bias_diff_on" type="int" value="110" />
-    <param name="bias_hpf" type="int" value="37" />
+    <param name="bias_diff_off" type="int" value="180" />
+    <param name="bias_diff_on" type="int" value="100" />
+    <param name="bias_hpf" type="int" value="25" />
 
     <!-- micro seconds -->
     <param name="event_trail_filter_threshold" type="int" value="100000" /> 

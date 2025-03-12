@@ -1,6 +1,6 @@
 #pragma once
 
-#define DEBUG_MODE
+// #define DEBUG_MODE
 
 #include <ros/ros.h>
 #include <dvs_msgs/EventArray.h>
@@ -83,6 +83,8 @@ private:
     bool publish_slice_;
     bool write_to_text_ = false;
     bool do_adaptive_window_ = true;
+    bool rectify_ = true;
+    bool checker_board_window_ = false;
 
     int camera_height_ ;
     int camera_width_ ;
@@ -112,10 +114,15 @@ private:
     int msg_queue_size_;
 
     cv_bridge::CvImage cv_image_disparity_;
+    cv_bridge::CvImage left_pol_image_;
+    cv_bridge::CvImage right_pol_image_;
+
     image_transport::Publisher estimated_disparity_pub_;
+    image_transport::Publisher left_pol_image_pub_;
+    image_transport::Publisher right_pol_image_pub_;
+
     int disparity_range_ ; // Maximum disparity
-    int window_block_size_;  // must be odd
-    int window_step_size_;
+    int step_size_;
     int window_fill_size_;
 
     cv::Mat event_disparity_;
@@ -141,12 +148,12 @@ private:
     std::string estimated_disparity_path_ = "SAD_disparity_.txt";
 
     // Camera matrices (K) and distortion coefficients (dist)
-    cv::Mat K_0 = (cv::Mat_<double>(3,3) << 571.48555589, 0, 636.00644236, 
+    cv::Mat K_0 = (cv::Mat_<double>(3,3) << 571.48555589, 0, 636.00644236, // Master, right
                                            0, 572.41991416, 357.83088501, 
                                            0, 0, 1);
     cv::Mat dist_0 = (cv::Mat_<double>(1,4) << -0.02343015, 0.04860866, -0.00181647, 0.00308489);
 
-    cv::Mat K_1 = (cv::Mat_<double>(3,3) << 570.9912814, 0, 664.05891687, 
+    cv::Mat K_1 = (cv::Mat_<double>(3,3) << 570.9912814, 0, 664.05891687, // Slave left
                                            0, 571.99822399, 351.11646702, 
                                            0, 0, 1);
     cv::Mat dist_1 = (cv::Mat_<double>(1,4) << 0.02650264, -0.01766294, -0.0022541, 0.00644137);
