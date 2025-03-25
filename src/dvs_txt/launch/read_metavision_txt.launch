@@ -12,11 +12,11 @@
   <param name="left_csv_file_path" type="string" value="/home/asus/thesis_ws/src/dvs_txt/resource/master.csv" />
   <param name="right_csv_file_path" type="string" value="/home/asus/thesis_ws/src/dvs_txt/resource/slave.csv" />
 
-  <param name="loop_rate" type="double" value="0.05" />
+  <param name="loop_rate" type="double" value="0.04" />
 
   <param name="disparity_range" type="int" value="128" />
 
-  <param name="nearest_neighbour" type="bool" value="true" />
+  <param name="nearest_neighbour" type="bool" value="false" />
   <param name="NN_min_num_of_events" type="int" value="2" />
   <param name="NN_block_size" type="int" value="7" />
   

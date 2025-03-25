@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 2.8.3)
 project(dvs_txt)
 
 find_package(catkin_simple REQUIRED)
+find_package(OpenMP REQUIRED)
 catkin_simple(ALL_DEPS_REQUIRED)
 
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -O3")

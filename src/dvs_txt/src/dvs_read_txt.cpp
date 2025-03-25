@@ -27,7 +27,7 @@ DVSReadTxt::DVSReadTxt(ros::NodeHandle &nh, ros::NodeHandle nh_private) : nh_(nh
     nh_private.param<int>("camera_height", camera_height_, 11);
     nh_private.param<int>("camera_width", camera_width_, 11);
 
-    nh_private.param<std::string>("file_path", event_txt_file_path_, "/home/asus/thesis_ws/src/dvs_txt/resource/box2.txt");
+    nh_private.param<std::string>("file_path", event_txt_file_path_, "/home/asus/thesis_ws/src/dvs_txt/resource/walking1.txt");
     nh_private.param<std::string>("left_csv_file_path", left_event_csv_file_path_, "/home/asus/thesis_ws/src/dvs_txt/resource/master.csv");
     nh_private.param<std::string>("right_csv_file_path", right_event_csv_file_path_, "/home/asus/thesis_ws/src/dvs_txt/resource/slave.csv");
 
@@ -90,8 +90,6 @@ DVSReadTxt::DVSReadTxt(ros::NodeHandle &nh, ros::NodeHandle nh_private) : nh_(nh
     gradient_sq_ = cv::Mat::zeros(event_image_left_polarity_.size(), CV_64F);
     window_size_map_ = cv::Mat::zeros(event_image_left_polarity_.size(), CV_8U);
 
-    gt_disparity_left_file_.open(gt_disparity_left_path_);
-    gt_disparity_right_file_.open(gt_disparity_right_path_);
     disparity_file_.open(disparity_path_);
 
     if (rectify_)
@@ -105,16 +103,14 @@ DVSReadTxt::DVSReadTxt(ros::NodeHandle &nh, ros::NodeHandle nh_private) : nh_(nh
         new_mid_y = (event_image_left_polarity_.rows - crop_height) / 2; // Center vertically
     }
 
-    if (!gt_disparity_left_file_.is_open() || !gt_disparity_right_file_.is_open() || !disparity_file_.is_open())
+    if (!disparity_file_.is_open())
     {
-        ROS_ERROR("Failed to open one or more output files");
+        ROS_ERROR("Failed to open disparity files");
     }
 }
 
 DVSReadTxt::~DVSReadTxt()
 {
-    gt_disparity_left_file_.close();
-    gt_disparity_right_file_.close();
     disparity_file_.close();
 }
 
@@ -439,8 +435,9 @@ void DVSReadTxt::calcPublishDisparity(
     std::ofstream &file)
 {
     auto start_time = std::chrono::high_resolution_clock::now();
-    cv::Mat disparity(event_image_polarity_left.size(), CV_64F, cv::Scalar(0));
+    int num_of_events = 0;
 
+    cv::Mat disparity(event_image_polarity_left.size(), CV_64F, cv::Scalar(0));
     if (!file.is_open())
     {
         std::cerr << "Error: Unable to open disparity file for writing!" << std::endl;
@@ -459,6 +456,7 @@ void DVSReadTxt::calcPublishDisparity(
             {
                 continue; // skip processing
             }
+            num_of_events++;
             
             if (event_image_polarity_left.at<uchar>(y, x) != 255 &&  event_image_polarity_left.at<uchar>(y, x) != 0)
             {
@@ -496,19 +494,20 @@ void DVSReadTxt::calcPublishDisparity(
                     {
                         int left_polarity = event_image_polarity_left.at<uchar>(y + wy, x + wx);
                         int right_polarity = event_image_right_polarity_.at<uchar>(y + wy, x + wx - d);
-                        // if (left_polarity != right_polarity)
-                        // {
-                        //     num_of_non_similar_pixels++;
-                        // }
-
-                        if (left_polarity != left_empty_pixel_val_ && right_polarity != right_empty_pixel_val_ )
+                        if (left_polarity != right_polarity)
                         {
                             num_of_non_similar_pixels++;
                         }
+
+                        // if (left_polarity != left_empty_pixel_val_ && right_polarity != right_empty_pixel_val_ )
+                        // {
+                        //     num_of_non_similar_pixels++;
+                        // }
                     }
                 }
 
-                cost = (total_pixel - num_of_non_similar_pixels) / total_pixel;
+                // cost = (total_pixel - num_of_non_similar_pixels) / total_pixel;
+                cost = num_of_non_similar_pixels / total_pixel;
                 // if (y == 14 && x == 56)
                 // {
                 //     std::cout << "cost:" << cost << ", num_of_non_similar_pixels:" << num_of_non_similar_pixels << ", total_pixel" << total_pixel << std::endl;
@@ -523,6 +522,11 @@ void DVSReadTxt::calcPublishDisparity(
             if (best_disparity != 0)
             {
                 double gt_disparity = left_gt_disparity.at<double>(y, x);
+                number_of_left_events_estimated_++;
+                if (std::abs(best_disparity - gt_disparity < 1))
+                {
+                    number_of_accurate_left_events_++;
+                }
                 file << y << "," << x << "," << best_disparity << "," << gt_disparity << "," << min_cost << "\n";
                 disparity.at<double>(y, x) = (best_disparity * 255 / disparity_range_);
             }
@@ -532,6 +536,18 @@ void DVSReadTxt::calcPublishDisparity(
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
     std::cout << "Disp calculation took: " << duration.count() / 1000.0 << " milliseconds" << std::endl;
+
+
+    static int num_of_calcs = 0;
+    static double total_time = 0;
+    if (num_of_events != 0)
+    {
+        num_of_calcs ++;
+        double time_taken_for_one_event = (double) duration.count() / (double) num_of_events;
+        total_time += time_taken_for_one_event;
+        std::cout << "Time required to process one event: " << time_taken_for_one_event << " microseconds" << std::endl;
+        std::cout << "Avg time time required to process one event: " << total_time /  (double) num_of_calcs << " microseconds" << std::endl;    
+    }
 
     disparity.convertTo(disparity, CV_8U);                      // Convert from 64F to 8U
     cv::applyColorMap(disparity, color_map_, cv::COLORMAP_JET); // convert to colour map
@@ -701,8 +717,12 @@ void DVSReadTxt::loopOnce()
     if (time_elapsed.count() > loop_rate_)
     {
         loop_timer_ = t;
-        dvs_msgs::Event tmp = left_events_.at(0);
-        double start_offset = tmp.ts.toSec() + (tmp.ts.toNSec() / 1e9);
+        dvs_msgs::Event first_event = left_events_.at(0);
+        double start_offset = first_event.ts.toSec() + (first_event.ts.toNSec() / 1e9);
+
+        dvs_msgs::Event last_event = left_events_.back();
+        double final_time_ = last_event.ts.toSec() + (last_event.ts.toNSec() / 1e9);
+
         auto algo_start = high_resolution_clock::now();
         if (publish_slice_)
         {
@@ -715,9 +735,19 @@ void DVSReadTxt::loopOnce()
         {
             publishOnce(start_offset + total_time_elapsed.count(), start_offset + total_time_elapsed.count() + loop_rate_);
         }
+
+        if (total_time_elapsed.count() > final_time_)
+        {
+            // Print out stats
+            float estimation_rate = (float) number_of_left_events_estimated_ / left_events_.size() * 100;
+            float estimation_accuracy = (float) number_of_accurate_left_events_ / number_of_left_events_estimated_ * 100 ;
+            std::cout << "number of left events: " << left_events_.size() << std::endl;
+            std::cout << "number_of_left_events_estimated_= " << number_of_left_events_estimated_ << ", number_of_accurate_left_events_ = " << number_of_accurate_left_events_ << std::endl;
+            std::cout << "Estimation rate = " << estimation_rate << ", estimation_accuracy = " << estimation_accuracy << std::endl;
+        }
         auto algo_end = high_resolution_clock::now();
         duration<double> algo_duration = algo_end - algo_start;
 
-        std::cout << "Algorithm execution time: " << algo_duration.count() * 1000 << " milliseconds" << std::endl;
+        std::cout << "Total loop time: " << algo_duration.count() * 1000 << " milliseconds" << std::endl;
     }
 }

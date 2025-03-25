@@ -7,13 +7,13 @@
   <param name="nearest_neighbour" type="bool" value="false" />
   <param name="do_adaptive_window" type="bool" value="false" />
   <param name="rectify" type="bool" value="false" />
-  <param name="publish_slice" type="bool" value="true" />
+  <param name="publish_slice" type="bool" value="false" />
   
   <param name="camera_height" type="int" value="180" />
   <param name="camera_width" type="int" value="240" />
 
   <param name="loop_rate" type="double" value="0.05" />
-  <param name="file_path" type="string" value="/home/asus/thesis_ws/src/dvs_txt/resource/walking2.txt" />
+  <param name="file_path" type="string" value="/home/asus/thesis_ws/src/dvs_txt/resource/box1.txt" />
   <param name="left_csv_file_path" type="string" value="/home/asus/thesis_ws/src/dvs_txt/resource/master.csv" />
   <param name="right_csv_file_path" type="string" value="/home/asus/thesis_ws/src/dvs_txt/resource/slave.csv" />
 

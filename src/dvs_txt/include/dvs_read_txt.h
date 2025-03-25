@@ -158,13 +158,12 @@ private:
     cv::Mat map1_x, map1_y, map2_x, map2_y;
 
     // File Paths
-    std::ofstream gt_disparity_left_file_;
-    std::ofstream gt_disparity_right_file_;
     std::ofstream disparity_file_;
     std::string left_event_csv_file_path_;
     std::string right_event_csv_file_path_;
     std::string event_txt_file_path_;
-    std::string gt_disparity_left_path_ = "gt_disparity_left.txt"; 
-    std::string gt_disparity_right_path_ = "gt_disparity_right.txt"; 
     std::string disparity_path_ = "disparity_out_.txt";
+
+    int number_of_left_events_estimated_ = 0;
+    int number_of_accurate_left_events_ = 0;
 };
