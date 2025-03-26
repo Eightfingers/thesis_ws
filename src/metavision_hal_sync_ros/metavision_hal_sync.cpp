@@ -175,7 +175,7 @@ int main(int argc, char *argv[])
     }
 
     std::cout << "Camera serial: " << serial << std::endl;
-    std::cout << "Publishing topic; " << event_topic_name << std::endl;
+    std::cout << "Publishing to topic: " << event_topic_name << std::endl;
 
     if (mode_master)
     {
@@ -315,6 +315,7 @@ int main(int argc, char *argv[])
     // Prepare OpenCV window
     // event-based cameras do not have a frame rate, but we need one for visualization
     const int wait_time = static_cast<int>(std::round(1.f / fps_param * 1000)); // how much we should wait between two frames
+    
     cv::Mat display;                                                            // frame where events will be accumulated
     const std::string window_name = (mode_master) ? "Metavision HAL Sync - Master " : "Metavision HAL Sync - Slave ";
     cv::namedWindow(window_name, cv::WINDOW_GUI_EXPANDED);
