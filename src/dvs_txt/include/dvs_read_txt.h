@@ -13,6 +13,9 @@
 // Dynamic reconfigure
 #include <dynamic_reconfigure/server.h>
 
+// #define USE_TS
+// #define USE_NSAD
+
 using std::chrono::duration;
 
 class DVSReadTxt
@@ -31,10 +34,12 @@ public:
         dvs_msgs::EventArray &event_arr,
         cv::Mat &event_image_polarity,
         cv::Mat &event_image_disp_gt,
+        cv::Mat &event_ts,
+        cv::Mat &event_ts_prev,
         cv::Mat &map1_x,
         cv::Mat &map1_y);
     void applyNearestNeighborFilter(cv::Mat &event_image_pol, int value_of_empty_cell);
-    void createAdaptiveWindowMap(cv::Mat &event_image_pol,
+    void createBinaryEdgeMap(cv::Mat &event_image_pol,
                                  cv::Mat &sobel_x,
                                  cv::Mat &sobel_y,
                                  cv::Mat &mean,
@@ -66,14 +71,17 @@ private:
     image_transport::Publisher disparity_pub_;
     image_transport::Publisher img_pub_disparity_gt_left_;
     image_transport::Publisher img_pub_disparity_gt_right_;
-    image_transport::Publisher debug_image_pub_;
+    image_transport::Publisher debug_img_ts_left_pub_;
+    image_transport::Publisher debug_img_ts_right_pub_;
+    image_transport::Publisher sobel_img_pub_;
     image_transport::Publisher rect_left_image_pub_;
     image_transport::Publisher rect_right_image_pub_;
 
     // OpenCV Images
     cv_bridge::CvImage gt_cv_image_;
     cv_bridge::CvImage cv_image_disparity_;
-    cv_bridge::CvImage debug_image_;
+    cv_bridge::CvImage cv_image_ts_;
+    cv_bridge::CvImage sobel_debug_image_;
     cv_bridge::CvImage rect_left_image_;
     cv_bridge::CvImage rect_right_image_;
 
@@ -94,6 +102,7 @@ private:
 
     // Configuration Flags
     bool first_loop_ = true;
+    bool do_disp_estimation_ = false;
     bool do_NN_ = false;
     bool publish_slice_ = false;
     bool file_is_txt_ = false;
@@ -116,9 +125,7 @@ private:
     int NN_block_size_;
     int NN_min_num_of_events_;
     // Adaptive Window
-    int small_block_size_;
-    int medium_block_size_;
-    int large_block_size_;
+    int window_size_;
     int threshold_edge_;
     // Search range
     int disparity_range_;
@@ -131,10 +138,14 @@ private:
     cv::Mat event_image_right_polarity_;
     cv::Mat event_image_right_polarity_remmaped_;
     cv::Mat disparity_gt_right_;
+    cv::Mat event_image_left_ts_;
+    cv::Mat event_image_left_ts_prev_;
+    cv::Mat event_image_right_ts_;
+    cv::Mat event_image_right_ts_prev_;
 
     // Adaptive window Matrices
     cv::Mat sobel_x_, sobel_y_, mean_, mean_sq_, gradient_sq_;
-    cv::Mat window_size_map_;
+    cv::Mat image_binary_map_;
 
     cv::Mat K_0 = (cv::Mat_<double>(3,3) << 572.4314787055476, 0, 655.5993194282812, // Slave left
                                            0, 572.4314787055476, 353.9229001533187, 

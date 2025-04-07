@@ -19,86 +19,92 @@ DVSReadTxt::DVSReadTxt(ros::NodeHandle &nh, ros::NodeHandle nh_private) : nh_(nh
 
     nh_private.param<bool>("publish_slice", publish_slice_, false);
     nh_private.param<bool>("nearest_neighbour", do_NN_, false);
+    nh_private.param<bool>("do_disp_estimation", do_disp_estimation_, false);
     nh_private.param<bool>("write_to_text", write_to_text_, false);
     nh_private.param<bool>("file_is_txt", file_is_txt_, true);
     nh_private.param<bool>("do_adaptive_window", do_adaptive_window_, true);
     nh_private.param<bool>("rectify", rectify_, true);
-
     nh_private.param<int>("camera_height", camera_height_, 11);
     nh_private.param<int>("camera_width", camera_width_, 11);
-
     nh_private.param<std::string>("file_path", event_txt_file_path_, "/home/asus/thesis_ws/src/dvs_txt/resource/walking1.txt");
     nh_private.param<std::string>("left_csv_file_path", left_event_csv_file_path_, "/home/asus/thesis_ws/src/dvs_txt/resource/master.csv");
     nh_private.param<std::string>("right_csv_file_path", right_event_csv_file_path_, "/home/asus/thesis_ws/src/dvs_txt/resource/slave.csv");
-
     nh_private.param<double>("loop_rate", loop_rate_, 0.10);
     nh_private.param<double>("slice_start_time", slice_start_time_, 0.0);
     nh_private.param<double>("slice_end_time", slice_end_time_, 0.1);
     nh_private.param<int>("disparity_range", disparity_range_, 40);
     nh_private.param<int>("NN_block_size", NN_block_size_, 11);
     nh_private.param<int>("NN_min_num_of_events", NN_min_num_of_events_, 3);
-
     nh_private.param<int>("threshold_edge", threshold_edge_, 50);
-
-    nh_private.param<int>("small_block_size", small_block_size_, 7);
-    nh_private.param<int>("medium_block_size", medium_block_size_, 9);
-    nh_private.param<int>("large_block_size", large_block_size_, 11);
+    nh_private.param<int>("large_block_size", window_size_, 11);
 
     std::cout << "NN_min_num_of_events_.. " << NN_min_num_of_events_ << std::endl;
     std::cout << "do_NN_.. " << do_NN_ << std::endl;
-
+    std::cout << "do_disp_estimation.. " << do_disp_estimation_ << std::endl;
     std::cout << "Reading text file.. " << event_txt_file_path_ << std::endl;
     std::cout << "Reading csv file: " << left_event_csv_file_path_ << ", right_file_path:" << right_event_csv_file_path_ << std::endl;
     std::cout << "loop_rate_.. " << loop_rate_ << std::endl;
 
+    cv::Size image_size(camera_width_, camera_height_);
+
     image_transport::ImageTransport it_(nh);
     img_pub_disparity_gt_left_ = it_.advertise("disparity_gt_left_", 1);
     img_pub_disparity_gt_right_ = it_.advertise("disparity_gt_right_", 1);
-    debug_image_pub_ = it_.advertise("debug_img", 1);
+    debug_img_ts_left_pub_ = it_.advertise("debug_img_ts_left", 1);
+    debug_img_ts_right_pub_ = it_.advertise("debug_img_ts_right", 1);
+    sobel_img_pub_ = it_.advertise("sobel_img", 1);
+
+    disparity_pub_ = it_.advertise("left_disparity", 1);
 
     gt_cv_image_.encoding = "bgr8";
-    gt_cv_image_.image = cv::Mat(camera_height_, camera_width_, CV_8U, cv::Scalar(0));
+    gt_cv_image_.image = cv::Mat(image_size, CV_8U, cv::Scalar(0));
 
-    debug_image_.encoding = "mono8";
-    debug_image_.image = cv::Mat(camera_height_, camera_width_, CV_32F, cv::Scalar(0));
+    sobel_debug_image_.encoding = "mono8";
+    sobel_debug_image_.image = cv::Mat(image_size, CV_32F, cv::Scalar(0));
 
     rect_left_image_.encoding = "mono8";
-    rect_left_image_.image = cv::Mat(camera_height_, camera_width_, CV_32F, cv::Scalar(0));
+    rect_left_image_.image = cv::Mat(image_size, CV_32F, cv::Scalar(0));
     rect_left_image_pub_ = it_.advertise("left_rect", 1);
 
     rect_right_image_.encoding = "mono8";
-    rect_right_image_.image = cv::Mat(camera_height_, camera_width_, CV_32F, cv::Scalar(0));
+    rect_right_image_.image = cv::Mat(image_size, CV_32F, cv::Scalar(0));
     rect_right_image_pub_ = it_.advertise("right_rect", 1);
 
     cv_image_disparity_.encoding = "bgr8";
-    cv_image_disparity_.image = cv::Mat(camera_height_, camera_width_, CV_8U, cv::Scalar(0));
-    disparity_pub_ = it_.advertise("left_disparity", 1);
+    cv_image_disparity_.image = cv::Mat(image_size, CV_8U, cv::Scalar(0));
 
-    event_image_left_polarity_ = cv::Mat(camera_height_, camera_width_, CV_8U, cv::Scalar(left_empty_pixel_val_));
-    event_image_left_polarity_remmaped_ = cv::Mat(camera_height_, camera_width_, CV_8U, cv::Scalar(left_empty_pixel_val_));
-    disparity_gt_left_ = cv::Mat(camera_height_, camera_width_, CV_64F, cv::Scalar(0));
+    cv_image_ts_.encoding = "bgr8";
+    cv_image_ts_.image = cv::Mat(image_size, CV_8U, cv::Scalar(0));
 
-    event_image_right_polarity_ = cv::Mat(camera_height_, camera_width_, CV_8U, cv::Scalar(right_empty_pixel_val_));
-    event_image_right_polarity_remmaped_ = cv::Mat(camera_height_, camera_width_, CV_8U, cv::Scalar(right_empty_pixel_val_));
-    disparity_gt_right_ = cv::Mat(camera_height_, camera_width_, CV_64F, cv::Scalar(0));
+    event_image_left_polarity_ = cv::Mat(image_size, CV_8U, cv::Scalar(left_empty_pixel_val_));
+    event_image_left_polarity_remmaped_ = cv::Mat(image_size, CV_8U, cv::Scalar(left_empty_pixel_val_));
+    disparity_gt_left_ = cv::Mat(image_size, CV_64F, cv::Scalar(0));
 
-    color_map_ = cv::Mat(camera_height_, camera_width_, CV_8U, cv::Scalar(0));
-    sobel_x_ = cv::Mat::zeros(event_image_left_polarity_.size(), CV_64F);
-    sobel_y_ = cv::Mat::zeros(event_image_left_polarity_.size(), CV_64F);
-    mean_ = cv::Mat::zeros(event_image_left_polarity_.size(), CV_64F);
-    mean_sq_ = cv::Mat::zeros(event_image_left_polarity_.size(), CV_64F);
-    gradient_sq_ = cv::Mat::zeros(event_image_left_polarity_.size(), CV_64F);
-    window_size_map_ = cv::Mat::zeros(event_image_left_polarity_.size(), CV_8U);
+    event_image_right_polarity_ = cv::Mat(image_size, CV_8U, cv::Scalar(right_empty_pixel_val_));
+    event_image_right_polarity_remmaped_ = cv::Mat(image_size, CV_8U, cv::Scalar(right_empty_pixel_val_));
+    disparity_gt_right_ = cv::Mat(image_size, CV_64F, cv::Scalar(0));
+
+    event_image_left_ts_ = cv::Mat(image_size, CV_64F, cv::Scalar(0));
+    event_image_left_ts_prev_ = cv::Mat(image_size, CV_64F, cv::Scalar(0));
+    event_image_right_ts_ = cv::Mat(image_size, CV_64F, cv::Scalar(0));
+    event_image_right_ts_prev_ = cv::Mat(image_size, CV_64F, cv::Scalar(0));
+
+    color_map_ = cv::Mat(image_size, CV_8U, cv::Scalar(0));
+    sobel_x_ = cv::Mat::zeros(image_size, CV_64F);
+    sobel_y_ = cv::Mat::zeros(image_size, CV_64F);
+    mean_ = cv::Mat::zeros(image_size, CV_64F);
+    mean_sq_ = cv::Mat::zeros(image_size, CV_64F);
+    gradient_sq_ = cv::Mat::zeros(image_size, CV_64F);
+    image_binary_map_ = cv::Mat::zeros(image_size, CV_8U);
 
     disparity_file_.open(disparity_path_);
 
     if (rectify_)
     {
-        cv::Size imageSize(camera_width_, camera_height_);
 
-        cv::stereoRectify(K_0, dist_0, K_1, dist_1, imageSize, R, T, R1, R2, P1, P2, Q, 0);
-        cv::initUndistortRectifyMap(K_0, dist_0, R1, P1, imageSize, CV_32FC1, map1_x, map1_y);
-        cv::initUndistortRectifyMap(K_1, dist_1, R2, P2, imageSize, CV_32FC1, map2_x, map2_y);
+        // cv::stereoRectify(K_0, dist_0, K_1, dist_1, image_size, R, T, R1, R2, P1, P2, Q, 0);
+        cv::initUndistortRectifyMap(K_0, dist_0, R1, P1, image_size, CV_32FC1, map1_x, map1_y);
+        cv::initUndistortRectifyMap(K_1, dist_1, R2, P2, image_size, CV_32FC1, map2_x, map2_y);
         new_mid_x = (event_image_left_polarity_.cols - crop_width) / 2;  // Center horizontally
         new_mid_y = (event_image_left_polarity_.rows - crop_height) / 2; // Center vertically
     }
@@ -264,12 +270,11 @@ void DVSReadTxt::readTimeSliceEventsVec(
     dvs_msgs::EventArray &event_arr,
     cv::Mat &event_image_polarity,
     cv::Mat &event_image_disp_gt,
+    cv::Mat &event_ts,
+    cv::Mat &event_ts_prev,
     cv::Mat &map1_x,
     cv::Mat &map1_y)
 {
-    int num_same_pixels = 0 ;
-    // int start_index2 = 0;
-    // bool found = false;
 
     for (int i = start_index; i < event_vector.size(); i++)
     {
@@ -279,12 +284,6 @@ void DVSReadTxt::readTimeSliceEventsVec(
 
         if (current_ts > start_time)
         {
-            // if (!found)
-            // {
-            //     start_index2 = i;
-            //     found = true;
-            // }
-            
             // found the time start
             event_arr.events.emplace_back(tmp);
 
@@ -293,20 +292,40 @@ void DVSReadTxt::readTimeSliceEventsVec(
             uchar polarity;
             if (tmp.polarity)
             {
+#ifdef USE_NSAD
+                polarity = 1;
+#else
                 polarity = 255;
+#endif
             }
             else
             {
+#ifdef USE_NSAD
+                polarity = -1;
+#else
                 polarity = 0;
+#endif
             }
+
+#ifdef USE_TS
+            if (event_ts.at<double>(row, col) == 0)
+            {
+                event_ts.at<double>(row, col) = current_ts;
+            }
+            else
+            {
+                event_ts_prev.at<double>(row, col) = event_ts.at<double>(row, col);
+                event_ts.at<double>(row, col) = current_ts;
+            }
+#elif defined(USE_NSAD)
+            event_image_polarity.at<uchar>(row, col) += polarity;
+
+#else
+            event_image_polarity.at<uchar>(row, col) = polarity;
+#endif
 
             event_image_disp_gt.at<double>(row, col) = disparity;
 
-            if (event_image_polarity.at<uchar>(row, col) == 255 || event_image_polarity.at<uchar>(row, col) == 0)
-            {
-                num_same_pixels += 1;
-            }
-            event_image_polarity.at<uchar>(row, col) = polarity;
             if (current_ts > end_time)
             {
                 start_index = i;
@@ -315,8 +334,6 @@ void DVSReadTxt::readTimeSliceEventsVec(
             }
         }
     }
-    // std::cout << "Total number of pixels :" << start_index - start_index2 << std::endl;
-    // std::cout << "num_same_pixels:" << num_same_pixels << std::endl;
 }
 
 void DVSReadTxt::applyNearestNeighborFilter(cv::Mat &event_image_pol, int value_of_empty_cell)
@@ -325,9 +342,9 @@ void DVSReadTxt::applyNearestNeighborFilter(cv::Mat &event_image_pol, int value_
 
     int final_row = event_image_pol.rows - NN_block_size_ - 1;
     int final_col = event_image_pol.cols - NN_block_size_ - 1;
-    for (int y = NN_block_size_ / 2; y < final_row  / 2; y++)
+    for (int y = NN_block_size_ / 2; y < final_row / 2; y++)
     {
-        for (int x = NN_block_size_ / 2; x < final_col  / 2; x++)
+        for (int x = NN_block_size_ / 2; x < final_col / 2; x++)
         {
             if (event_image_pol.at<uchar>(y, x) == value_of_empty_cell)
             {
@@ -374,13 +391,13 @@ void DVSReadTxt::applyNearestNeighborFilter(cv::Mat &event_image_pol, int value_
     std::cout << "Nearest neighbor filtering took: " << duration_NN.count() / 1000.0 << " milliseconds" << std::endl;
 }
 
-void DVSReadTxt::createAdaptiveWindowMap(cv::Mat &event_image_pol,
-                                         cv::Mat &sobel_x,
-                                         cv::Mat &sobel_y,
-                                         cv::Mat &mean,
-                                         cv::Mat &mean_sq,
-                                         cv::Mat &gradient_sq,
-                                         cv::Mat &image_window_sizes)
+void DVSReadTxt::createBinaryEdgeMap(cv::Mat &event_image_pol,
+                                     cv::Mat &sobel_x,
+                                     cv::Mat &sobel_y,
+                                     cv::Mat &mean,
+                                     cv::Mat &mean_sq,
+                                     cv::Mat &gradient_sq,
+                                     cv::Mat &image_binary_map)
 {
     cv::Sobel(event_image_pol, sobel_x, CV_64F, 1, 0, 3);
     cv::Sobel(event_image_pol, sobel_y, CV_64F, 0, 1, 3);
@@ -393,8 +410,8 @@ void DVSReadTxt::createAdaptiveWindowMap(cv::Mat &event_image_pol,
     tmp = gradient_magnitude.clone();
     cv::normalize(tmp, tmp, 0, 255, cv::NORM_MINMAX, CV_8U);
 
-    tmp.copyTo(debug_image_.image);
-    debug_image_pub_.publish(debug_image_.toImageMsg());
+    tmp.copyTo(sobel_debug_image_.image);
+    sobel_img_pub_.publish(sobel_debug_image_.toImageMsg());
 
     for (int i = 0; i < event_image_pol.rows; i++)
     {
@@ -407,11 +424,11 @@ void DVSReadTxt::createAdaptiveWindowMap(cv::Mat &event_image_pol,
             double grad_val = gradient_magnitude.at<double>(i, j);
             if (grad_val > threshold_edge_)
             {
-                image_window_sizes.at<uchar>(i, j) = small_block_size_;
+                image_binary_map.at<uchar>(i, j) = 1;
             }
             else
             {
-                image_window_sizes.at<uchar>(i, j) = large_block_size_;
+                image_binary_map.at<uchar>(i, j) = 0;
             }
         }
     }
@@ -443,11 +460,11 @@ void DVSReadTxt::calcPublishDisparity(
         std::cerr << "Error: Unable to open disparity file for writing!" << std::endl;
     }
 
-    int half_block = large_block_size_ / 2;
-    double total_pixel = large_block_size_ * large_block_size_;
-    int total_rows = event_image_polarity_left.rows - half_block -1;
-    int total_cols = event_image_polarity_left.cols - half_block -1;
-    
+    int half_block = window_size_ / 2;
+    double total_pixel = window_size_ * window_size_;
+    int total_rows = event_image_polarity_left.rows - half_block - 1;
+    int total_cols = event_image_polarity_left.cols - half_block - 1;
+
     for (int y = half_block; y < total_rows; y++)
     {
         for (int x = half_block; x < total_cols; x++)
@@ -456,23 +473,17 @@ void DVSReadTxt::calcPublishDisparity(
             {
                 continue; // skip processing
             }
-            num_of_events++;
-            
-            if (event_image_polarity_left.at<uchar>(y, x) != 255 &&  event_image_polarity_left.at<uchar>(y, x) != 0)
+
+            if (do_adaptive_window_ && image_binary_map_.at<uchar>(y, x) == 0)
             {
-                std::cout << "ERRROR!!! left event_pol_image should only contain 255 or 0 or 127:" << event_image_polarity_left.at<uchar>(y, x) <<std::endl;
+                continue;
             }
+
+            num_of_events++;
 
             // Window calculation
             int best_disparity = 0;
             double min_cost = 10000000;
-
-            if (do_adaptive_window_)
-            {
-                int window_size = window_size_map_.at<uchar>(y, x);
-                half_block = window_size / 2;
-                total_pixel = window_size * window_size;
-            }
 
             // Compare blocks at different disparities
             for (int d = 0; d < disparity_range_; d++)
@@ -487,6 +498,11 @@ void DVSReadTxt::calcPublishDisparity(
                 double num_of_similar_pixels = 0;
                 double num_of_non_similar_pixels = 0;
 
+#ifdef USE_TS
+                int num_of_valid_pixels = 0;
+                double sum_abs_diff = 0;
+#endif
+
                 // Compute costs for the current disparity
                 for (int wy = -half_block; wy <= half_block; wy++)
                 {
@@ -494,24 +510,37 @@ void DVSReadTxt::calcPublishDisparity(
                     {
                         int left_polarity = event_image_polarity_left.at<uchar>(y + wy, x + wx);
                         int right_polarity = event_image_right_polarity_.at<uchar>(y + wy, x + wx - d);
+
+#ifdef USE_TS
+                        double left_ts = event_image_left_ts_.at<double>(y + wy, x + wx);
+                        double left_ts_prev = event_image_left_ts_prev_.at<double>(y + wy, x + wx);
+                        double right_ts = event_image_right_ts_.at<double>(y + wy, x + wx);
+                        double right_ts_prev = event_image_right_ts_prev_.at<double>(y + wy, x + wx);
+
+                        if (left_polarity == right_polarity)
+                        {
+                            num_of_valid_pixels++;
+                            sum_abs_diff += std::abs(left_ts - right_ts);
+                        }
+#elif defined(USE_NSAD)
+                        cost += std::abs(left_polarity - right_polarity) / left_polarity + right_polarity;
+#else
                         if (left_polarity != right_polarity)
                         {
                             num_of_non_similar_pixels++;
                         }
-
-                        // if (left_polarity != left_empty_pixel_val_ && right_polarity != right_empty_pixel_val_ )
-                        // {
-                        //     num_of_non_similar_pixels++;
-                        // }
+#endif
                     }
                 }
 
-                // cost = (total_pixel - num_of_non_similar_pixels) / total_pixel;
+#ifdef USE_TS
+                cost = sum_abs_diff / num_of_valid_pixels;
+#elif defined(USE_NSAD)
+                cost = cost;
+#else
                 cost = num_of_non_similar_pixels / total_pixel;
-                // if (y == 14 && x == 56)
-                // {
-                //     std::cout << "cost:" << cost << ", num_of_non_similar_pixels:" << num_of_non_similar_pixels << ", total_pixel" << total_pixel << std::endl;
-                // }
+#endif
+
                 if (cost < min_cost)
                 {
                     min_cost = cost;
@@ -537,16 +566,15 @@ void DVSReadTxt::calcPublishDisparity(
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
     std::cout << "Disp calculation took: " << duration.count() / 1000.0 << " milliseconds" << std::endl;
 
-
     static int num_of_calcs = 0;
     static double total_time = 0;
     if (num_of_events != 0)
     {
-        num_of_calcs ++;
-        double time_taken_for_one_event = (double) duration.count() / (double) num_of_events;
+        num_of_calcs++;
+        double time_taken_for_one_event = (double)duration.count() / (double)num_of_events;
         total_time += time_taken_for_one_event;
         std::cout << "Time required to process one event: " << time_taken_for_one_event << " microseconds" << std::endl;
-        std::cout << "Avg time time required to process one event: " << total_time /  (double) num_of_calcs << " microseconds" << std::endl;    
+        std::cout << "Avg time time required to process one event: " << total_time / (double)num_of_calcs << " microseconds" << std::endl;
     }
 
     disparity.convertTo(disparity, CV_8U);                      // Convert from 64F to 8U
@@ -596,6 +624,8 @@ void DVSReadTxt::publishOnce(double start_time, double end_time)
         event_image_right_polarity_.setTo(right_empty_pixel_val_);
         disparity_gt_right_.setTo(0);
 
+        image_binary_map_.setTo(0);
+
         readTimeSliceEventsVec(
             left_event_index_,
             start_time,
@@ -605,6 +635,8 @@ void DVSReadTxt::publishOnce(double start_time, double end_time)
             left_arr,
             event_image_left_polarity_,
             disparity_gt_left_,
+            event_image_left_ts_,
+            event_image_left_ts_prev_,
             map1_x,
             map1_y);
 
@@ -617,6 +649,8 @@ void DVSReadTxt::publishOnce(double start_time, double end_time)
             right_arr,
             event_image_right_polarity_,
             disparity_gt_right_,
+            event_image_right_ts_,
+            event_image_right_ts_prev_,
             map2_x,
             map2_x);
 
@@ -636,14 +670,11 @@ void DVSReadTxt::publishOnce(double start_time, double end_time)
 
             cv::remap(event_image_left_polarity_, event_image_left_polarity_remmaped_, map1_x, map1_y, cv::INTER_NEAREST);
             cv::remap(event_image_right_polarity_, event_image_right_polarity_remmaped_, map2_x, map2_y, cv::INTER_NEAREST);
-            cv::Rect crop_region(new_mid_x, new_mid_y, crop_width, crop_height);
 
             // Crop the image
-            event_image_left_polarity_remmaped_  = event_image_left_polarity_remmaped_(crop_region);
-            event_image_right_polarity_remmaped_  = event_image_right_polarity_remmaped_(crop_region);
-
-            // cv::resize(event_image_left_polarity_remmaped_, event_image_left_polarity_remmaped_, cv::Size(event_image_left_polarity_remmaped_.cols / 2, event_image_left_polarity_remmaped_.rows / 2), 0, 0, cv::INTER_NEAREST);
-            // cv::resize(event_image_right_polarity_remmaped_, event_image_right_polarity_remmaped_, cv::Size(event_image_right_polarity_remmaped_.cols / 2, event_image_right_polarity_remmaped_.rows / 2), 0, 0, cv::INTER_NEAREST);
+            cv::Rect crop_region(new_mid_x, new_mid_y, crop_width, crop_height);
+            event_image_left_polarity_remmaped_ = event_image_left_polarity_remmaped_(crop_region);
+            event_image_right_polarity_remmaped_ = event_image_right_polarity_remmaped_(crop_region);
 
             event_image_left_polarity_remmaped_.copyTo(rect_left_image_.image);
             rect_left_image_pub_.publish(rect_left_image_.toImageMsg());
@@ -653,7 +684,7 @@ void DVSReadTxt::publishOnce(double start_time, double end_time)
         else
         {
             // Nothing happens
-            event_image_left_polarity_remmaped_= event_image_left_polarity_;
+            event_image_left_polarity_remmaped_ = event_image_left_polarity_;
             event_image_right_polarity_remmaped_ = event_image_right_polarity_;
         }
 
@@ -663,13 +694,22 @@ void DVSReadTxt::publishOnce(double start_time, double end_time)
 
         if (do_adaptive_window_)
         {
-            createAdaptiveWindowMap(event_image_left_polarity_remmaped_,
-                                    sobel_x_,
-                                    sobel_y_,
-                                    mean_,
-                                    mean_sq_,
-                                    gradient_sq_,
-                                    window_size_map_);
+            createBinaryEdgeMap(event_image_left_polarity_remmaped_,
+                                sobel_x_,
+                                sobel_y_,
+                                mean_,
+                                mean_sq_,
+                                gradient_sq_,
+                                image_binary_map_);
+        }
+
+        if (do_disp_estimation_)
+        {
+            calcPublishDisparity(
+                event_image_left_polarity_remmaped_,
+                event_image_right_polarity_remmaped_,
+                disparity_gt_left_,
+                disparity_file_);
         }
 
         publishGTDisparity(
@@ -679,14 +719,8 @@ void DVSReadTxt::publishOnce(double start_time, double end_time)
         publishGTDisparity(
             disparity_gt_right_,
             img_pub_disparity_gt_right_);
-        
-        calcPublishDisparity(
-            event_image_left_polarity_remmaped_,
-            event_image_right_polarity_remmaped_,
-            disparity_gt_left_,
-            disparity_file_);
     }
-    
+
     // Publish event array data
     left_arr.header.stamp = ros::Time::now();
     right_arr.header.stamp = ros::Time::now();
@@ -700,6 +734,27 @@ void DVSReadTxt::publishOnce(double start_time, double end_time)
     left_event_arr_pub_.publish(left_arr);
     right_event_arr_pub_.publish(right_arr);
 
+#ifdef USE_TS
+    cv::Mat colour_map_left_;
+    cv::Mat tmp_left;
+    event_image_left_ts_.copyTo(tmp_left);
+    double minVal, maxVal;
+    minMaxLoc(tmp_left, &minVal, &maxVal);
+    tmp_left.convertTo(tmp_left, CV_8U, 255.0 / (maxVal - minVal), -minVal * 255.0 / (maxVal - minVal));
+    cv::applyColorMap(tmp_left, colour_map_left_, cv::COLORMAP_BONE); // convert to colour map
+    colour_map_left_.copyTo(cv_image_ts_.image);
+    debug_img_ts_left_pub_.publish(cv_image_ts_.toImageMsg());
+
+    cv::Mat colour_map_right_;
+    cv::Mat tmp_right;
+    event_image_right_ts_.copyTo(tmp_right);
+    double minVal2, maxVal2;
+    minMaxLoc(tmp_right, &minVal2, &maxVal2);
+    tmp_right.convertTo(tmp_right, CV_8U, 255.0 / (maxVal - minVal), -minVal * 255.0 / (maxVal - minVal));
+    cv::applyColorMap(tmp_right, colour_map_right_, cv::COLORMAP_BONE); // convert to colour map
+    colour_map_right_.copyTo(cv_image_ts_.image);
+    debug_img_ts_right_pub_.publish(cv_image_ts_.toImageMsg());
+#endif
 }
 
 void DVSReadTxt::loopOnce()
@@ -739,8 +794,8 @@ void DVSReadTxt::loopOnce()
         if (total_time_elapsed.count() > final_time_)
         {
             // Print out stats
-            float estimation_rate = (float) number_of_left_events_estimated_ / left_events_.size() * 100;
-            float estimation_accuracy = (float) number_of_accurate_left_events_ / number_of_left_events_estimated_ * 100 ;
+            float estimation_rate = (float)number_of_left_events_estimated_ / left_events_.size() * 100;
+            float estimation_accuracy = (float)number_of_accurate_left_events_ / number_of_left_events_estimated_ * 100;
             std::cout << "number of left events: " << left_events_.size() << std::endl;
             std::cout << "number_of_left_events_estimated_= " << number_of_left_events_estimated_ << ", number_of_accurate_left_events_ = " << number_of_accurate_left_events_ << std::endl;
             std::cout << "Estimation rate = " << estimation_rate << ", estimation_accuracy = " << estimation_accuracy << std::endl;
@@ -748,6 +803,6 @@ void DVSReadTxt::loopOnce()
         auto algo_end = high_resolution_clock::now();
         duration<double> algo_duration = algo_end - algo_start;
 
-        std::cout << "Total loop time: " << algo_duration.count() * 1000 << " milliseconds" << std::endl;
+        std::cout << "Total loop time: " << algo_duration.count() * 1000 << " milliseconds, Elapsed time:" << start_offset + total_time_elapsed.count() << " seconds" << std::endl;
     }
 }
