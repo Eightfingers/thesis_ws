@@ -102,8 +102,8 @@ DVSReadTxt::DVSReadTxt(ros::NodeHandle &nh, ros::NodeHandle nh_private) : nh_(nh
     if (rectify_)
     {
         // cv::stereoRectify(K_0, dist_0, K_1, dist_1, image_size, R, T, R1, R2, P1, P2, Q, 0);
-        cv::initUndistortRectifyMap(K_0, dist_0, R1, P1, image_size, CV_32FC1, map1_x, map1_y);
-        cv::initUndistortRectifyMap(K_1, dist_1, R2, P2, image_size, CV_32FC1, map2_x, map2_y);
+        cv::initUndistortRectifyMap(K_0, dist_0, R1, P1, image_size, CV_32FC1, map_slave_x, map_slave_y);
+        cv::initUndistortRectifyMap(K_1, dist_1, R2, P2, image_size, CV_32FC1, map_master_x, map_master_y);
         new_mid_x = (event_image_left_polarity_.cols - crop_width) / 2;  // Center horizontally
         new_mid_y = (event_image_left_polarity_.rows - crop_height) / 2; // Center vertically
     }
@@ -636,8 +636,8 @@ void DVSReadTxt::publishOnce(double start_time, double end_time)
             disparity_gt_left_,
             event_image_left_ts_,
             event_image_left_ts_prev_,
-            map1_x,
-            map1_y);
+            map_slave_x,
+            map_slave_y);
 
         readTimeSliceEventsVec(
             right_event_index_,
@@ -650,8 +650,8 @@ void DVSReadTxt::publishOnce(double start_time, double end_time)
             disparity_gt_right_,
             event_image_right_ts_,
             event_image_right_ts_prev_,
-            map2_x,
-            map2_y);
+            map_master_x,
+            map_master_y);
 
         // Apply Nearest Neighbor filtering
         if (do_NN_)
@@ -667,13 +667,13 @@ void DVSReadTxt::publishOnce(double start_time, double end_time)
             // cv::remap(event_image_left_polarity_, event_image_left_polarity_, map1_x, map1_y, cv::INTER_NEAREST);
             // cv::remap(event_image_right_polarity_, event_image_right_polarity_, map2_x, map2_y, cv::INTER_NEAREST);
 
-            cv::remap(event_image_left_polarity_, event_image_left_polarity_remmaped_, map2_x, map2_y, cv::INTER_NEAREST);
-            cv::remap(event_image_right_polarity_, event_image_right_polarity_remmaped_, map1_x, map1_y, cv::INTER_NEAREST);
+            cv::remap(event_image_left_polarity_, event_image_left_polarity_remmaped_, map_slave_x, map_slave_y, cv::INTER_NEAREST);
+            cv::remap(event_image_right_polarity_, event_image_right_polarity_remmaped_, map_master_x, map_master_y, cv::INTER_NEAREST);
 
             // Crop the image
-            // cv::Rect crop_region(new_mid_x, new_mid_y, crop_width, crop_height);
-            // event_image_left_polarity_remmaped_ = event_image_left_polarity_remmaped_(crop_region);
-            // event_image_right_polarity_remmaped_ = event_image_right_polarity_remmaped_(crop_region);
+            cv::Rect crop_region(new_mid_x, new_mid_y, crop_width, crop_height);
+            event_image_left_polarity_remmaped_ = event_image_left_polarity_remmaped_(crop_region);
+            event_image_right_polarity_remmaped_ = event_image_right_polarity_remmaped_(crop_region);
 
             event_image_left_polarity_remmaped_.copyTo(rect_left_image_.image);
             rect_left_image_pub_.publish(rect_left_image_.toImageMsg());

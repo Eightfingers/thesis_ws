@@ -153,10 +153,10 @@ void DVSStereo::publishOnce(double start_time, double end_time)
         cv::remap(event_image_right_polarity_, event_image_right_polarity_remmaped_, map_master_x, map_master_y, cv::INTER_NEAREST);
         cv::remap(event_image_left_polarity_, event_image_left_polarity_remmaped_, map_slave_x, map_slave_y, cv::INTER_NEAREST);
     
-        cv::Rect crop_region(new_mid_x, new_mid_y, crop_width, crop_height);
+        // cv::Rect crop_region(new_mid_x, new_mid_y, crop_width, crop_height);
         // Crop the image
-        event_image_left_polarity_remmaped_  = event_image_left_polarity_remmaped_(crop_region);
-        event_image_right_polarity_remmaped_  = event_image_right_polarity_remmaped_(crop_region);
+        // event_image_left_polarity_remmaped_  = event_image_left_polarity_remmaped_(crop_region);
+        // event_image_right_polarity_remmaped_  = event_image_right_polarity_remmaped_(crop_region);
     
         auto end_time_map = std::chrono::high_resolution_clock::now();
         auto duration_map = std::chrono::duration_cast<std::chrono::microseconds>(end_time_map - start_time_map);

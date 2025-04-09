@@ -144,27 +144,20 @@ private:
 
     std::string estimated_disparity_path_ = "SAD_disparity_.txt";
 
-    // Camera matrices (K) and distortion coefficients (dist)
-    // cv::Mat K_0 = (cv::Mat_<double>(3,3) << 570.9912814, 0, 664.05891687, // Slave left
-    //                                        0, 571.99822399, 351.11646702, 
-    //                                        0, 0, 1);
+    cv::Mat K_0 = (cv::Mat_<double>(3,3) << // slave left
+        560.12251945, 0, 649.5897273,
+        0, 560.60013947, 350.82562497,
+        0, 0, 1);
+    cv::Mat dist_0 = (cv::Mat_<double>(1,4) << 
+        0.01820616, -0.01350185, -0.00057661, -0.00074246);
 
-    cv::Mat K_0 = (cv::Mat_<double>(3,3) << 572.4314787055476, 0, 655.5993194282812, // Slave left
-                                           0, 572.4314787055476, 353.9229001533187, 
-                                           0, 0, 1);
-    cv::Mat dist_0 = (cv::Mat_<double>(1,4) << -0.08538147921551763, 0.1829366218062925, 0.0006811934446241191, 0.002427034158652812, 0);
+    cv::Mat K_1 = (cv::Mat_<double>(3,3) << // master right
+        563.87494477, 0, 626.17947286,
+        0, 564.16504935, 358.44549531,
+        0, 0, 1);
+    cv::Mat dist_1 = (cv::Mat_<double>(1,4) << 
+        -0.00760154, 0.0203495, -0.00069216, -0.00175436);
 
-    // cv::Mat K_1 = (cv::Mat_<double>(3,3) << 571.48555589, 0, 636.00644236, // Master, right
-    //                                        0, 572.41991416, 357.83088501, 
-    //                                        0, 0, 1);
-    // cv::Mat dist_1 = (cv::Mat_<double>(1,4) << -0.02343015, 0.04860866, -0.00181647, 0.00308489);
-
-    cv::Mat K_1 = (cv::Mat_<double>(3,3) << 5.6397392716854040e+02, 0, 6.3196082987426553e+02,
-                                            0, 5.6397392716854040e+02, 3.6335609870294326e+02, 
-                                            0, 0, 1);
-
-    cv::Mat dist_1 = (cv::Mat_<double>(1,4) <<  -8.1253226522012695e-02, 1.6508260669048941e-01,
-            -                                   2.1049100648449411e-04, 2.4157447475095357e-03, 0.0);
 
     // Rotation and translation between the cameras
     cv::Mat R = cv::Mat::eye(3, 3, CV_64F); // Assuming the rotation matrix R is identity for simplicity.
