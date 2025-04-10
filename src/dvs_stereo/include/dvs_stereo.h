@@ -79,7 +79,6 @@ private:
     bool write_to_text_ = false;
     bool do_adaptive_window_ = true;
     bool rectify_ = true;
-    bool checker_board_window_ = false;
 
     int camera_height_ ;
     int camera_width_ ;
@@ -112,11 +111,15 @@ private:
     cv_bridge::CvImage cv_image_depth_;
     cv_bridge::CvImage left_pol_image_;
     cv_bridge::CvImage right_pol_image_;
+    cv_bridge::CvImage rect_left_image_;
+    cv_bridge::CvImage rect_right_image_;
 
     image_transport::Publisher estimated_disparity_pub_;
     image_transport::Publisher estimated_depth_pub_;
     image_transport::Publisher left_pol_image_pub_;
     image_transport::Publisher right_pol_image_pub_;
+    image_transport::Publisher rect_left_image_pub_;
+    image_transport::Publisher rect_right_image_pub_;
 
     int disparity_range_ ; // Maximum disparity
     int step_size_;
@@ -140,7 +143,7 @@ private:
 
     // Adaptive window Matrices
     cv::Mat sobel_x_, sobel_y_, mean_, mean_sq_, gradient_sq_;
-    cv::Mat window_size_map_;
+    cv::Mat image_binary_map_;
 
     std::string estimated_disparity_path_ = "SAD_disparity_.txt";
 

@@ -1,4 +1,4 @@
-#include "dvs_read_txt.h"
+#include "dvs_stereo.h"
 
 int main(int argc, char *argv[])
 {
