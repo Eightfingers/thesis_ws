@@ -304,6 +304,7 @@ void DVSStereo::createAdaptiveWindowMap(cv::Mat &event_image_pol, cv::Mat &sobel
             }
         }
     }
+    
 }
 
 void DVSStereo::calcPublishDisparity(
@@ -321,8 +322,6 @@ void DVSStereo::calcPublishDisparity(
 
     int half_block = large_block_size_ / 2;
     double total_pixel = large_block_size_ * large_block_size_;
-
-    std::cout << event_image_polarity_left.rows << std::endl;
     
     const int total_rows = event_image_polarity_left.rows - half_block - 1;
     const int total_cols = event_image_polarity_left.cols - half_block - 1;
@@ -361,7 +360,7 @@ void DVSStereo::calcPublishDisparity(
                 {
                     for (int wx = -half_block; wx <= half_block; wx++)
                     {
-                        if ((event_image_polarity_left.at<uchar>(y + wy, x + wx) != event_image_right_polarity_.at<uchar>(y + wy, x + wx - d)))
+                        if ((event_image_polarity_left.at<uchar>(y + wy, x + wx) != event_image_polarity_right.at<uchar>(y + wy, x + wx - d)))
                         {
                             num_of_non_similar_pixels++;
                         }

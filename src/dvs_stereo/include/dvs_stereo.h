@@ -1,6 +1,5 @@
 #pragma once
 
-// #define DEBUG_MODE
 
 #include <ros/ros.h>
 #include <dvs_msgs/EventArray.h>
@@ -17,6 +16,7 @@
 // Dynamic reconfigure
 #include <dynamic_reconfigure/server.h>
 
+// #define DEBUG_MODE
 
 using std::chrono::duration;
 
