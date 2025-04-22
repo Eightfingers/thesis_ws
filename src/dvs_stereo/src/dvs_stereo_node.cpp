@@ -11,7 +11,6 @@ int main(int argc, char *argv[])
   while (ros::ok())
   {
     ros::spinOnce(); // Handle ROS events
-    // syncronizer.loopOnce();
   }
 
   return 0;

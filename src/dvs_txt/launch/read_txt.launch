@@ -14,9 +14,9 @@
   <param name="camera_width" type="int" value="240" />
 
   <param name="loop_rate" type="double" value="0.04" />
-  <param name="file_path" type="string" value="/home/asus/thesis_ws/src/dvs_txt/resource/box1.txt" />
-  <param name="left_csv_file_path" type="string" value="/home/asus/thesis_ws/src/dvs_txt/resource/master.csv" />
-  <param name="right_csv_file_path" type="string" value="/home/asus/thesis_ws/src/dvs_txt/resource/slave.csv" />
+  <param name="file_path" type="string" value="/home/asdfg/thesis_ws/src/dvs_txt/resource/box1.txt" />
+  <param name="left_csv_file_path" type="string" value="/home/asdfg/thesis_ws/src/dvs_txt/resource/master.csv" />
+  <param name="right_csv_file_path" type="string" value="/home/asdfg/thesis_ws/src/dvs_txt/resource/slave.csv" />
 
   <param name="disparity_range" type="int" value="30" />
   <param name="window_block_size" type="int" value="13" />

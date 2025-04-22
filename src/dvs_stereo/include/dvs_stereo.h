@@ -25,15 +25,16 @@ class DVSStereo
 public:
     DVSStereo(ros::NodeHandle &nh, ros::NodeHandle p_nh);
 
-    void publishOnce(double start_time, double end_time);
-    void loopOnce();
+    void publishOnce();
     void getSuitableSlice(dvs_msgs::EventArray &event_array, double start_time, double end_time);
     virtual ~DVSStereo();
 
 private:
     void readEventArray(
         dvs_msgs::EventArray &event_array,
-        cv::Mat &event_image_polarity);
+        cv::Mat &event_image_polarity,
+        cv::Mat &map_x, 
+        cv::Mat &map_y);
 
     void applyNearestNeighborFilter(cv::Mat &event_image_pol, int value_of_empty_cell);
 

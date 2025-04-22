@@ -464,9 +464,9 @@ void DVSReadTxt::calcPublishDisparity(
     int total_rows = event_image_polarity_left.rows - half_block - 1;
     int total_cols = event_image_polarity_left.cols - half_block - 1;
 
-    for (int y = half_block; y < total_rows; y++)
+    for (int y = half_block; y < total_rows; y+=2)
     {
-        for (int x = half_block; x < total_cols; x++)
+        for (int x = half_block; x < total_cols; x+=2)
         {
             if (event_image_polarity_left.at<uchar>(y, x) == left_empty_pixel_val_)
             {
@@ -557,6 +557,22 @@ void DVSReadTxt::calcPublishDisparity(
                 }
                 file << y << "," << x << "," << best_disparity << "," << gt_disparity << "," << min_cost << "\n";
                 disparity.at<double>(y, x) = (best_disparity * 255 / disparity_range_);
+
+                double disparity_out = (best_disparity * 255 / disparity_range_);
+                disparity.at<uchar>(y, x) = disparity_out;
+
+                // double depth = (FOCAL_LENGTH * BASELINE) / best_disparity; // Compute depth
+                // depth_map_.at<double>(y, x) = depth;
+                
+                // disparity around this pixel is the same.
+                for (int i = y - 1; i < y + 1; i++)
+                {
+                    for (int j = x - 1; j < x + 1; j++)
+                    {
+                        disparity.at<uchar>(i, j) = disparity_out;
+                    }
+                }
+
             }
         }
     }
