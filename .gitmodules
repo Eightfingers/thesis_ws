@@ -1,0 +1,3 @@
+[submodule "src/rpg_dvs_ros"]
+	path = src/rpg_dvs_ros
+	url = https://github.com/uzh-rpg/rpg_dvs_ros

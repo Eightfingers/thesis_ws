@@ -1,0 +1,12 @@
+# Ignore the build directory
+/build/
+
+/devel/
+
+/logs/
+
+/src/metavision_dvs_txt/resource/
+/src/dvs_txt/resource/
+
+.vscode
+.catkin_tools

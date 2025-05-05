@@ -8,7 +8,7 @@
 
     <param name="mode_master" type="bool" value="true" />
     <param name="mode_slave" type="bool" value="false" />
-    <param name="fps" type="int" value="30" />
+    <param name="wait_time" type="double" value="0.020" />
     
     <param name="bias_diff_off" type="int" value="180" />
     <param name="bias_diff_on" type="int" value="100" />

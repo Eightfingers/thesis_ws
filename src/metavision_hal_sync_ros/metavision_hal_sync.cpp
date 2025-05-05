@@ -17,6 +17,8 @@
 #include <opencv2/opencv.hpp>
 #include <thread>
 #include <mutex>
+#include <chrono>
+#include <csignal>
 
 #include <metavision/hal/facilities/i_camera_synchronization.h>
 #include <metavision/hal/facilities/i_trigger_in.h>
@@ -40,6 +42,12 @@
 #include <dvs_msgs/EventArray.h>
 #include <dvs_msgs/Event.h>
 
+#include <csignal>
+using std::chrono::duration;
+using std::chrono::duration_cast;
+using std::chrono::high_resolution_clock;
+using std::chrono::milliseconds;
+
 class EventAnalyzer
 {
 public:
@@ -50,7 +58,6 @@ public:
         topic_name_ = topic_name;
     };
 
-    cv::Mat img, img_swap;
     dvs_msgs::EventArray event_arr;
     ros::NodeHandle nh_;
     ros::NodeHandle nh_private_;
@@ -67,17 +74,13 @@ public:
 
     void setup_display(const int width, const int height)
     {
-        img = cv::Mat(height, width, CV_8UC3);
-        img_swap = cv::Mat(height, width, CV_8UC3);
-        img.setTo(color_bg);
-
         event_arr.height = height;
         event_arr.width = width;
         event_array_publisher = nh_.advertise<dvs_msgs::EventArray>(topic_name_, 1000000);
     }
 
     // Called from main Thread
-    void get_display_frame(cv::Mat &display)
+    void publish_array_to_ros()
     {
         // Swap images
         {
@@ -85,10 +88,7 @@ public:
             event_arr.header.stamp = ros::Time::now();
             event_array_publisher.publish(event_arr);
             event_arr.events.clear();
-            std::swap(img, img_swap);
-            img.setTo(color_bg);
         }
-        img_swap.copyTo(display);
     }
 
     // Called from decoding Thread
@@ -120,7 +120,6 @@ public:
             { // no image display if the camera is not ready
                 for (auto it = begin; it != end; ++it)
                 {
-                    img.at<cv::Vec3b>(it->y, it->x) = (it->p) ? color_on : color_off;
                     tmp.y = it->y;
                     tmp.x = it->x;
                     tmp.polarity = it->p;
@@ -134,6 +133,15 @@ public:
         }
     }
 };
+
+bool stop_decoding = false;
+// Signal handler for Ctrl+C
+void signal_handler(int signal, std::thread &decoding_loop) {
+    ros::shutdown();
+    stop_decoding = true;
+    decoding_loop.join();
+    std::cout << "Ctrl+C detected. Exiting...";
+}
 
 namespace po = boost::program_options;
 int main(int argc, char *argv[])
@@ -149,7 +157,7 @@ int main(int argc, char *argv[])
     std::string event_topic_name;
     bool mode_master = false;
     bool mode_slave = false;
-    int fps_param = 25;
+    double wait_time = 0.033;
     int bias_diff_off = 0;
     int bias_diff_on = 0;
     int bias_hpf = 0;
@@ -162,7 +170,7 @@ int main(int argc, char *argv[])
     nh_private.param<bool>("mode_master", mode_master, false);
     nh_private.param<bool>("mode_slave", mode_slave, true);
 
-    nh_private.param<int>("fps", fps_param, 0);
+    nh_private.param<double>("wait_time", wait_time, 0);
     nh_private.param<int>("bias_diff_off", bias_diff_off, 0);
     nh_private.param<int>("bias_diff_on", bias_diff_on, 0);
     nh_private.param<int>("bias_hpf", bias_hpf, 0);
@@ -296,8 +304,6 @@ int main(int argc, char *argv[])
 
     // Get the decoder of events & start decoding thread
     Metavision::I_Decoder *i_decoder = device->get_facility<Metavision::I_EventsStreamDecoder>();
-    bool stop_decoding = false;
-    bool stop_application = false;
     std::thread decoding_loop([&]()
                               {
         while (!stop_decoding) {
@@ -312,37 +318,19 @@ int main(int argc, char *argv[])
             }
         } });
 
-    // Prepare OpenCV window
-    // event-based cameras do not have a frame rate, but we need one for visualization
-    const int wait_time = static_cast<int>(std::round(1.f / fps_param * 1000)); // how much we should wait between two frames
-    
-    cv::Mat display;                                                            // frame where events will be accumulated
-    const std::string window_name = (mode_master) ? "Metavision HAL Sync - Master " : "Metavision HAL Sync - Slave ";
-    cv::namedWindow(window_name, cv::WINDOW_GUI_EXPANDED);
-    cv::resizeWindow(window_name, i_geometry->get_width(), i_geometry->get_height());
-
-    // Now let's create the loop of main thread
-    while (!stop_application)
+    auto t = high_resolution_clock::now();
+    while (ros::ok())
     {
-        event_analyzer.get_display_frame(display);
-
-        if (!display.empty())
+        auto loop_timer_ = high_resolution_clock::now();
+        duration<double> time_elapsed = loop_timer_ - t;
+        
+        if (time_elapsed.count() > wait_time) // 30hz
         {
-            cv::imshow(window_name, display);
+            event_analyzer.publish_array_to_ros();
+            t = loop_timer_;
         }
-
-        // If user presses `q` key, exit loop and stop application
-        int key = cv::waitKey(wait_time);
-        if ((key & 0xff) == 'q')
-        {
-            stop_application = true;
-            stop_decoding = true;
-            std::cout << "q pressed, exiting." << std::endl;
-        }
+        ros::spinOnce();
     }
-
-    // Wait end of decoding loop
-    decoding_loop.join();
 
     return 0;
 }
