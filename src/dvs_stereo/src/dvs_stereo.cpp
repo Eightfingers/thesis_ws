@@ -17,7 +17,6 @@ using std::chrono::milliseconds;
 
 DVSStereo::DVSStereo(ros::NodeHandle &nh, ros::NodeHandle nh_private) : nh_(nh), p_nh_(nh_private)
 {
-
     nh_private.param<int>("camera_height", camera_height_, 11);
     nh_private.param<int>("camera_width", camera_width_, 11);
 
@@ -51,8 +50,11 @@ DVSStereo::DVSStereo(ros::NodeHandle &nh, ros::NodeHandle nh_private) : nh_(nh),
     // sync_->setAgePenalty(age_penalty_);  // Reduce age penalty (100 microseconds)
     // sync_->setMaxIntervalDuration(ros::Duration(0.010));  // 10 millisecond tolerance
 
-    // Stereo rectify
-    cv::Size image_size(camera_width_, camera_height_);
+    new_mid_x = (camera_width_ - crop_width_) / 2;  // Center horizontally
+    new_mid_y = (camera_height_ - crop_height_) / 2; // Center vertically
+    crop_region_ = cv::Rect(new_mid_x, new_mid_y, crop_width_,crop_height_ );
+    image_size_ = cv::Size(camera_width_, camera_height_);
+    cropped_image_size_ = cv::Size(crop_width_, crop_height_);
 
     image_transport::ImageTransport it_(nh);
     estimated_disparity_pub_ = it_.advertise("left_disparity", 1);
@@ -61,61 +63,51 @@ DVSStereo::DVSStereo(ros::NodeHandle &nh, ros::NodeHandle nh_private) : nh_(nh),
     estimated_depth_pub_ = it_.advertise("left_depth_map", 1);
 
     rect_left_image_.encoding = "mono8";
-    rect_left_image_.image = cv::Mat(image_size, CV_32F, cv::Scalar(0));
+    rect_left_image_.image = cv::Mat(image_size_, CV_32F, cv::Scalar(0));
     rect_left_image_pub_ = it_.advertise("left_rect", 1);
 
     rect_right_image_.encoding = "mono8";
-    rect_right_image_.image = cv::Mat(image_size, CV_32F, cv::Scalar(0));
+    rect_right_image_.image = cv::Mat(image_size_, CV_32F, cv::Scalar(0));
     rect_right_image_pub_ = it_.advertise("right_rect", 1);
 
     cv_image_disparity_.encoding = "bgr8";
-    cv_image_disparity_.image = cv::Mat(image_size, CV_8U, cv::Scalar(0));
+    cv_image_disparity_.image = cv::Mat(image_size_, CV_8U, cv::Scalar(0));
 
     cv_image_depth_.encoding = "bgr8";
-    cv_image_depth_.image = cv::Mat(image_size, CV_8U, cv::Scalar(0));
+    cv_image_depth_.image = cv::Mat(image_size_, CV_8U, cv::Scalar(0));
 
     left_pol_image_.encoding = "mono8";
-    left_pol_image_.image = cv::Mat(image_size, CV_8U, cv::Scalar(0));
+    left_pol_image_.image = cv::Mat(image_size_, CV_8U, cv::Scalar(0));
     right_pol_image_.encoding = "mono8";
-    right_pol_image_.image = cv::Mat(image_size, CV_8U, cv::Scalar(0));
+    right_pol_image_.image = cv::Mat(image_size_, CV_8U, cv::Scalar(0));
 
-    event_image_left_ = cv::Mat(image_size, CV_8U, cv::Scalar(0));
-    event_image_left_polarity_ = cv::Mat(image_size, CV_8U, cv::Scalar(left_empty_pixel_val_));
-    event_image_left_polarity_remmaped_ = cv::Mat(image_size, CV_8U, cv::Scalar(left_empty_pixel_val_));
+    event_image_left_ = cv::Mat(image_size_, CV_8U, cv::Scalar(0));
+    event_image_left_polarity_ = cv::Mat(image_size_, CV_8U, cv::Scalar(left_empty_pixel_val_));
+    event_image_left_polarity_remmaped_ = cv::Mat(image_size_, CV_8U, cv::Scalar(left_empty_pixel_val_));
 
-    event_image_right_ = cv::Mat(image_size, CV_8U, cv::Scalar(0));
-    event_image_right_polarity_ = cv::Mat(image_size, CV_8U, cv::Scalar(right_empty_pixel_val_));
-    event_image_right_polarity_remmaped_ = cv::Mat(image_size, CV_8U, cv::Scalar(right_empty_pixel_val_));
+    event_image_right_ = cv::Mat(image_size_, CV_8U, cv::Scalar(0));
+    event_image_right_polarity_ = cv::Mat(image_size_, CV_8U, cv::Scalar(right_empty_pixel_val_));
+    event_image_right_polarity_remmaped_ = cv::Mat(image_size_, CV_8U, cv::Scalar(right_empty_pixel_val_));
 
-    disparity_color_map_ = cv::Mat(image_size, CV_8U, cv::Scalar(0));
-    depth_map_ = cv::Mat(image_size, CV_32F, cv::Scalar(0));
+    disparity_color_map_ = cv::Mat(image_size_, CV_8U, cv::Scalar(0));
+    depth_map_ = cv::Mat(image_size_, CV_32F, cv::Scalar(0));
 
-    sobel_x_ = cv::Mat::zeros(image_size, CV_64F);
-    sobel_y_ = cv::Mat::zeros(image_size, CV_64F);
-    mean_ = cv::Mat::zeros(image_size, CV_64F);
-    mean_sq_ = cv::Mat::zeros(image_size, CV_64F);
-    gradient_sq_ = cv::Mat::zeros(image_size, CV_64F);
-    image_binary_map_ = cv::Mat::zeros(image_size, CV_8U);
+    sobel_x_ = cv::Mat::zeros(image_size_, CV_64F);
+    sobel_y_ = cv::Mat::zeros(image_size_, CV_64F);
+    mean_ = cv::Mat::zeros(image_size_, CV_64F);
+    mean_sq_ = cv::Mat::zeros(image_size_, CV_64F);
+    gradient_sq_ = cv::Mat::zeros(image_size_, CV_64F);
+    image_binary_map_ = cv::Mat::zeros(image_size_, CV_8U);
 
-    cv::stereoRectify(K_0, dist_0, K_1, dist_1, image_size, R, T, R0, R1, P0, P1, Q, 0);
-    cv::initUndistortRectifyMap(K_0, dist_0, R0, P0, image_size, CV_32FC1, map_slave_x, map_slave_y); // Slave, Left
-    cv::initUndistortRectifyMap(K_1, dist_1, R1, P1, image_size, CV_32FC1, map_master_x, map_master_y); // Master, Right
+    cv::stereoRectify(K_0, dist_0, K_1, dist_1, image_size_, R, T, R0, R1, P0, P1, Q, 0);
+    cv::initUndistortRectifyMap(K_0, dist_0, R0, P0, image_size_, CV_32FC1, map_slave_x, map_slave_y); // Slave, Left
+    cv::initUndistortRectifyMap(K_1, dist_1, R1, P1, image_size_, CV_32FC1, map_master_x, map_master_y); // Master, Right
     
-    new_mid_x = (event_image_left_polarity_.cols - crop_width) / 2;  // Center horizontally
-    new_mid_y = (event_image_left_polarity_.rows - crop_height) / 2; // Center vertically
-
-    // cv::Rect crop_region(new_mid_x, new_mid_y, crop_width, crop_height);
-    // // Crop the image
-    // event_image_left_polarity_remmaped_  = event_image_left_polarity_remmaped_(crop_region);
-    // event_image_right_polarity_remmaped_  = event_image_right_polarity_remmaped_(crop_region);
-
     ROS_INFO("NN_min_num_of_events_: %d", NN_min_num_of_events_);
     ROS_INFO("Do NN: %s", do_NN_ ? "true" : "false");
     ROS_INFO("Do calc disparity: %s", calc_disparity_ ? "true" : "false");
     ROS_INFO("Do adaptive window?: %s", do_adaptive_window_ ? "true" : "false");
     ROS_INFO("Finished init!");
-    
-    loop_timer_ = high_resolution_clock::now();
 }
 
 DVSStereo::~DVSStereo()
@@ -162,19 +154,17 @@ void DVSStereo::publishOnce()
     {
         auto start_time_map = std::chrono::high_resolution_clock::now();
 
-        // cv::undistort(event_image_right_polarity_, event_image_right_polarity_remmaped_, K_1, dist_1);
-        // cv::undistort(event_image_left_polarity_, event_image_left_polarity_remmaped_, K_0, dist_0);
-
         cv::remap(event_image_right_polarity_, event_image_right_polarity_remmaped_, map_master_x, map_master_y, cv::INTER_NEAREST);
         cv::remap(event_image_left_polarity_, event_image_left_polarity_remmaped_, map_slave_x, map_slave_y, cv::INTER_NEAREST);
-    
-        cv::Rect crop_region(new_mid_x, new_mid_y, crop_width, crop_height);
+
         // Crop the image
-        event_image_left_polarity_remmaped_  = event_image_left_polarity_remmaped_(crop_region);
-        event_image_right_polarity_remmaped_  = event_image_right_polarity_remmaped_(crop_region);
-        image_binary_map_  = image_binary_map_(crop_region);
+        event_image_left_polarity_remmaped_  = event_image_left_polarity_remmaped_(crop_region_);
+        event_image_right_polarity_remmaped_  = event_image_right_polarity_remmaped_(crop_region_);
+        image_binary_map_  = image_binary_map_(crop_region_);
+        
         auto end_time_map = std::chrono::high_resolution_clock::now();
         auto duration_map = std::chrono::duration_cast<std::chrono::microseconds>(end_time_map - start_time_map);
+        
         event_image_left_polarity_remmaped_.copyTo(rect_left_image_.image);
         rect_left_image_pub_.publish(rect_left_image_.toImageMsg());
 
@@ -528,7 +518,6 @@ void DVSStereo::syncCallback(const dvs_msgs::EventArray::ConstPtr &msg1, const d
     getSuitableSlice(right_events_, common_start, common_end);
     publishOnce();
 
-    // loop_timer_ = t;
     auto algo_end = high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(algo_end - algo_start);
 

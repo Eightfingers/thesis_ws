@@ -67,12 +67,6 @@ private:
     dvs_msgs::EventArray left_events_;
     dvs_msgs::EventArray right_events_;
 
-    std::chrono::time_point<std::chrono::high_resolution_clock> time_start_;
-    std::chrono::high_resolution_clock::time_point loop_timer_;
-
-    std::string left_event_dataset_file_path_;
-    std::string right_event_dataset_file_path_;
-
     bool calc_disparity_ = false;
     bool first_loop_ = true;
     bool do_NN_ = false;
@@ -81,6 +75,7 @@ private:
     bool do_adaptive_window_ = true;
     bool rectify_ = true;
 
+    cv::Size image_size_;
     int camera_height_ ;
     int camera_width_ ;
     int disparity_step_;
@@ -94,8 +89,10 @@ private:
     int left_empty_pixel_val_ = 127;
     int right_empty_pixel_val_ = 126;
 
-    int crop_width = 1200;
-    int crop_height = 630;
+    cv::Rect crop_region_;
+    cv::Size cropped_image_size_;
+    int crop_width_ = 1200;
+    int crop_height_ = 630;
     int new_mid_x;
     int new_mid_y;
 
