@@ -316,10 +316,15 @@ void DVSStereo::calcPublishDisparity(
     // Window-based disparity calculation
     auto start_time_disp = std::chrono::high_resolution_clock::now();
     
+    // Focal length calculation
+    // event camera Pixel size (μm) 4.86 x 4.86 
+    // (560.12251945 * 4.86 * 10 ^-3) + (560.60013947 * 4.86 * 10^-3) 
+    // = 2.72 mm + 2.73mm
+    // Sensor resolution
     const double FOCAL_LENGTH = 0.0027; // f (from K_1)
     const double BASELINE = 0.03963375;       // B (from T_x)
-    const double MAX_DISTANCE = 22.65;
-    const double MIN_DISTANCE = 0.354;
+    // const double MAX_DISTANCE = 22.65;
+    // const double MIN_DISTANCE = 0.354;
 
     int half_block = large_block_size_ / 2;
     double window_total_pixel = large_block_size_ * large_block_size_;
@@ -377,9 +382,10 @@ void DVSStereo::calcPublishDisparity(
                 // Window for the current disparity
                 for (int wy = -half_block; wy <= half_block; wy++)
                 {
+                    int px_y = y + wy;
                     for (int wx = -half_block; wx <= half_block; wx++)
                     {                        
-                        if ((event_image_polarity_left.at<uchar>(y + wy, x + wx) != event_image_polarity_right.at<uchar>(y + wy, x + wx - d)))
+                        if ((event_image_polarity_left.at<uchar>(px_y, x + wx) != event_image_polarity_right.at<uchar>(px_y, x + wx - d)))
                         {
                             num_of_non_similar_pixels++;
                         }

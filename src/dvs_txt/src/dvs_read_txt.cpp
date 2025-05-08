@@ -464,14 +464,26 @@ void DVSReadTxt::calcPublishDisparity(
     int total_rows = event_image_polarity_left.rows - half_block - 1;
     int total_cols = event_image_polarity_left.cols - half_block - 1;
 
-    for (int y = half_block; y < total_rows; y+=2)
+    // Use Raw pointers to speed up access
+    uchar* p_left;
+    uchar* p_right;
+    uchar* p_left_inner; 
+    uchar* p_right_inner; 
+    for (int y = half_block; y < total_rows; y+=1)
     {
-        for (int x = half_block; x < total_cols; x+=2)
+        p_left = event_image_polarity_left.ptr<uchar>(y);
+        for (int x = half_block; x < total_cols; x+=1)
         {
-            if (event_image_polarity_left.at<uchar>(y, x) == left_empty_pixel_val_)
+
+            if (p_left[x] == left_empty_pixel_val_)
             {
                 continue; // skip processing
             }
+
+            // if (event_image_polarity_left.at<uchar>(y, x) == left_empty_pixel_val_)
+            // {
+            //     continue; // skip processing
+            // }
 
             if (do_adaptive_window_ && image_binary_map_.at<uchar>(y, x) == 0)
             {
@@ -501,7 +513,6 @@ void DVSReadTxt::calcPublishDisparity(
                 int num_of_valid_pixels = 0;
                 double sum_abs_diff = 0;
 #endif
-
                 // Compute costs for the current disparity
                 for (int wy = -half_block; wy <= half_block; wy++)
                 {
@@ -549,17 +560,17 @@ void DVSReadTxt::calcPublishDisparity(
 
             if (best_disparity != 0)
             {
-                double gt_disparity = left_gt_disparity.at<double>(y, x);
-                number_of_left_events_estimated_++;
-                if (std::abs(best_disparity - gt_disparity < 1))
-                {
-                    number_of_accurate_left_events_++;
-                }
-                file << y << "," << x << "," << best_disparity << "," << gt_disparity << "," << min_cost << "\n";
-                disparity.at<double>(y, x) = (best_disparity * 255 / disparity_range_);
+                // double gt_disparity = left_gt_disparity.at<double>(y, x);
+                // number_of_left_events_estimated_++;
+                // if (std::abs(best_disparity - gt_disparity < 1))
+                // {
+                //     number_of_accurate_left_events_++;
+                // }
+                // file << y << "," << x << "," << best_disparity << "," << gt_disparity << "," << min_cost << "\n";
+                // disparity.at<double>(y, x) = (best_disparity * 255 / disparity_range_);
 
                 double disparity_out = (best_disparity * 255 / disparity_range_);
-                disparity.at<uchar>(y, x) = disparity_out;
+                // disparity.at<double>(y, x) = disparity_out;
 
                 // double depth = (FOCAL_LENGTH * BASELINE) / best_disparity; // Compute depth
                 // depth_map_.at<double>(y, x) = depth;
@@ -569,10 +580,9 @@ void DVSReadTxt::calcPublishDisparity(
                 {
                     for (int j = x - 1; j < x + 1; j++)
                     {
-                        disparity.at<uchar>(i, j) = disparity_out;
+                        disparity.at<double>(i, j) = disparity_out;
                     }
                 }
-
             }
         }
     }

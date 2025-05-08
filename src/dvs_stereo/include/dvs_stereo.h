@@ -159,10 +159,10 @@ private:
     cv::Mat dist_1 = (cv::Mat_<double>(1,4) << 
         -0.00760154, 0.0203495, -0.00069216, -0.00175436);
 
-
     // Rotation and translation between the cameras
     cv::Mat R = cv::Mat::eye(3, 3, CV_64F); // Assuming the rotation matrix R is identity for simplicity.
-    cv::Mat T = (cv::Mat_<double>(3,1) << 0.03963375, -0.00024961, 0.00266686);
+
+    cv::Mat T = (cv::Mat_<double>(3,1) << 0.0398738, -0.00020666, -0.00021764);
 
     // Stereo rectification variables
     cv::Mat R0, R1, P0, P1, Q;
