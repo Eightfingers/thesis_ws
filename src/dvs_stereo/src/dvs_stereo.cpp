@@ -420,7 +420,7 @@ void DVSStereo::calcPublishDisparity(
                 // disparity_.at<uchar>(y+1, x) = disparity_out;
                 // disparity_.at<uchar>(y+1, x+1) = disparity_out;
 
-                double depth = (FOCAL_LENGTH * BASELINE) / best_disparity; // Compute depth
+                // double depth = (FOCAL_LENGTH * BASELINE) / best_disparity; // Compute depth
                 
                 // disparity around this pixel is the same.
 
@@ -429,7 +429,8 @@ void DVSStereo::calcPublishDisparity(
                     for (int j = x - window_fill_size_; j <= x + window_fill_size_; j++)
                     {
                         disparity_.at<uchar>(i, j) = disparity_out;
-                        depth_map_.at<double>(i, j) = depth;
+                        
+                        // depth_map_.at<double>(i, j) = depth;
                     }
                 }
             }
@@ -444,7 +445,6 @@ void DVSStereo::calcPublishDisparity(
     #endif
     
     // cv::reprojectImageTo3D(disparity_, depth_map_, Q);
-
     // disparity_ = 255 - (disparity_ * 255 / disparity_range_);
     cv::applyColorMap(disparity_, disparity_color_map_, cv::COLORMAP_JET); // convert to colour map
     cv::Mat mask = (disparity_ == 0); // Binary mask where disparity is 0
@@ -455,8 +455,8 @@ void DVSStereo::calcPublishDisparity(
 
 
     // cv::normalize(depth_map_, depth_map_, 0, 255, cv::NORM_MINMAX, CV_8U);
-    depth_map_.copyTo(cv_image_depth_.image);
-    estimated_depth_pub_.publish(cv_image_depth_.toImageMsg());
+    // depth_map_.copyTo(cv_image_depth_.image);
+    // estimated_depth_pub_.publish(cv_image_depth_.toImageMsg());
 
     auto end_time_disp = std::chrono::high_resolution_clock::now();
     auto duration_disp = std::chrono::duration_cast<std::chrono::microseconds>(end_time_disp - start_time_disp);

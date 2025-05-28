@@ -159,6 +159,9 @@ private:
     cv::Mat dist_1 = (cv::Mat_<double>(1,4) << 
         -0.00760154, 0.0203495, -0.00069216, -0.00175436);
 
+// const double FOCAL_LENGTH = 0.0027; // f (from K_1)
+// const double BASELINE = 0.03963375;       // B (from T_x)
+    
     // Rotation and translation between the cameras
     cv::Mat R = cv::Mat::eye(3, 3, CV_64F); // Assuming the rotation matrix R is identity for simplicity.
 

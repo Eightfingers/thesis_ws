@@ -11,16 +11,16 @@
   <param name="msg_queue_size" type="int" value="100" />
 
   <param name="write_to_text" type="bool" value="false" />
-  <param name="calc_disparity" type="bool" value="false" />
-  <param name="do_adaptive_window" type="bool" value="false" />
-  <param name="nearest_neighbour" type="bool" value="true" />
+  <param name="calc_disparity" type="bool" value="true" />
+  <param name="do_adaptive_window" type="bool" value="true" />
+  <param name="nearest_neighbour" type="bool" value="false" />
   <param name="rectify" type="bool" value="true" />
 
-  <param name="disparity_range" type="int" value="100" />
+  <param name="disparity_range" type="int" value="60" />
   <param name="disparity_step" type="int" value="2" />
 
-  <param name="step_size" type="int" value="3" />
-  <param name="window_fill_size" type="int" value="2" />
+  <param name="step_size" type="int" value="2" />
+  <param name="window_fill_size" type="int" value="1" />
 
   <param name="NN_min_num_of_events" type="int" value="5"/>
   <param name="NN_block_size" type="int" value="10" />
