@@ -91,7 +91,7 @@ DVSStereo::DVSStereo(ros::NodeHandle &nh, ros::NodeHandle nh_private) : nh_(nh),
 
     disparity_color_map_ = cv::Mat(cropped_image_size_, CV_8U, cv::Scalar(0));
     disparity_ = cv::Mat(cropped_image_size_, CV_8U, cv::Scalar(0));
-    depth_map_ = cv::Mat(image_size_, CV_32F, cv::Scalar(0));
+    depth_map_ = cv::Mat(cropped_image_size_, CV_32F, cv::Scalar(0));
 
     sobel_x_ = cv::Mat::zeros(image_size_, CV_64F);
     sobel_y_ = cv::Mat::zeros(image_size_, CV_64F);
@@ -166,11 +166,11 @@ void DVSStereo::publishOnce()
         auto end_time_map = std::chrono::high_resolution_clock::now();
         auto duration_map = std::chrono::duration_cast<std::chrono::microseconds>(end_time_map - start_time_map);
         
-        // event_image_left_polarity_remmaped_.copyTo(rect_left_image_.image);
-        // rect_left_image_pub_.publish(rect_left_image_.toImageMsg());
+        event_image_left_polarity_remmaped_.copyTo(rect_left_image_.image);
+        rect_left_image_pub_.publish(rect_left_image_.toImageMsg());
 
-        // event_image_right_polarity_remmaped_.copyTo(rect_right_image_.image);
-        // rect_right_image_pub_.publish(rect_right_image_.toImageMsg());
+        event_image_right_polarity_remmaped_.copyTo(rect_right_image_.image);
+        rect_right_image_pub_.publish(rect_right_image_.toImageMsg());
         std::cout << "Rectify took: " << duration_map.count() / 1000.0 << " milliseconds" << std::endl;    
     }
     else
@@ -421,7 +421,6 @@ void DVSStereo::calcPublishDisparity(
                 // disparity_.at<uchar>(y+1, x+1) = disparity_out;
 
                 double depth = (FOCAL_LENGTH * BASELINE) / best_disparity; // Compute depth
-                depth_map_.at<double>(y, x) = depth;
                 
                 // disparity around this pixel is the same.
 
@@ -430,6 +429,7 @@ void DVSStereo::calcPublishDisparity(
                     for (int j = x - window_fill_size_; j <= x + window_fill_size_; j++)
                     {
                         disparity_.at<uchar>(i, j) = disparity_out;
+                        depth_map_.at<double>(i, j) = depth;
                     }
                 }
             }
@@ -445,12 +445,6 @@ void DVSStereo::calcPublishDisparity(
     
     // cv::reprojectImageTo3D(disparity_, depth_map_, Q);
 
-    // cv::Mat depth_single_channel;
-    // cv::extractChannel(depth_map_, depth_single_channel, 2); // Extract Z-depth
-    // cv::normalize(depth_single_channel, depth_single_channel, 0, 255, cv::NORM_MINMAX, CV_8U);
-    // depth_single_channel.copyTo(cv_image_depth_.image);    
-    // estimated_depth_pub_.publish(cv_image_depth_.toImageMsg());
-
     // disparity_ = 255 - (disparity_ * 255 / disparity_range_);
     cv::applyColorMap(disparity_, disparity_color_map_, cv::COLORMAP_JET); // convert to colour map
     cv::Mat mask = (disparity_ == 0); // Binary mask where disparity is 0
@@ -459,9 +453,10 @@ void DVSStereo::calcPublishDisparity(
     disparity_color_map_.copyTo(cv_image_disparity_.image);
     estimated_disparity_pub_.publish(cv_image_disparity_.toImageMsg());
 
+
     // cv::normalize(depth_map_, depth_map_, 0, 255, cv::NORM_MINMAX, CV_8U);
-    // depth_map_.copyTo(cv_image_depth_.image);
-    // estimated_depth_pub_.publish(cv_image_depth_.toImageMsg());
+    depth_map_.copyTo(cv_image_depth_.image);
+    estimated_depth_pub_.publish(cv_image_depth_.toImageMsg());
 
     auto end_time_disp = std::chrono::high_resolution_clock::now();
     auto duration_disp = std::chrono::duration_cast<std::chrono::microseconds>(end_time_disp - start_time_disp);

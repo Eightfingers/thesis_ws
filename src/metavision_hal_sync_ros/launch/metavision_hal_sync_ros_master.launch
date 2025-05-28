@@ -10,9 +10,14 @@
     <param name="mode_slave" type="bool" value="false" />
     <param name="wait_time" type="double" value="0.020" />
     
-    <param name="bias_diff_off" type="int" value="180" />
+    <!-- <param name="bias_diff_off" type="int" value="180" />
     <param name="bias_diff_on" type="int" value="100" />
+    <param name="bias_hpf" type="int" value="25" /> -->
+
+    <param name="bias_diff_off" type="int" value="100" />
+    <param name="bias_diff_on" type="int" value="50" />
     <param name="bias_hpf" type="int" value="25" />
+
 
     <!-- micro seconds -->
     <param name="event_trail_filter_threshold" type="int" value="100000" /> 
