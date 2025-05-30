@@ -76,12 +76,26 @@ DVSReadTxt::DVSReadTxt(ros::NodeHandle &nh, ros::NodeHandle nh_private) : nh_(nh
     cv_image_ts_.encoding = "bgr8";
     cv_image_ts_.image = cv::Mat(image_size, CV_8U, cv::Scalar(0));
 
-    event_image_left_polarity_ = cv::Mat(image_size, CV_8U, cv::Scalar(left_empty_pixel_val_));
-    event_image_left_polarity_remmaped_ = cv::Mat(image_size, CV_8U, cv::Scalar(left_empty_pixel_val_));
+
+    #ifdef USE_NSAD
+        event_image_left_polarity_ = cv::Mat(image_size, CV_8U, cv::Scalar(0));
+        event_image_left_polarity_remmaped_ = cv::Mat(image_size, CV_8U, cv::Scalar(0));
+    #else
+        event_image_left_polarity_ = cv::Mat(image_size, CV_8U, cv::Scalar(left_empty_pixel_val_));
+        event_image_left_polarity_remmaped_ = cv::Mat(image_size, CV_8U, cv::Scalar(left_empty_pixel_val_));
+    #endif
+    event_image_left_sum_ = cv::Mat(image_size, CV_8U, cv::Scalar(0));
     disparity_gt_left_ = cv::Mat(image_size, CV_64F, cv::Scalar(0));
 
-    event_image_right_polarity_ = cv::Mat(image_size, CV_8U, cv::Scalar(right_empty_pixel_val_));
-    event_image_right_polarity_remmaped_ = cv::Mat(image_size, CV_8U, cv::Scalar(right_empty_pixel_val_));
+
+    #ifdef USE_NSAD
+        event_image_right_polarity_ = cv::Mat(image_size, CV_8U, cv::Scalar(0));
+        event_image_right_polarity_remmaped_ = cv::Mat(image_size, CV_8U, cv::Scalar(0));
+    #else
+        event_image_right_polarity_ = cv::Mat(image_size, CV_8U, cv::Scalar(left_empty_pixel_val_));
+        event_image_right_polarity_remmaped_ = cv::Mat(image_size, CV_8U, cv::Scalar(left_empty_pixel_val_));
+    #endif
+    event_image_right_sum_ = cv::Mat(image_size, CV_8U, cv::Scalar(0));
     disparity_gt_right_ = cv::Mat(image_size, CV_64F, cv::Scalar(0));
 
     event_image_left_ts_ = cv::Mat(image_size, CV_64F, cv::Scalar(0));
@@ -268,6 +282,7 @@ void DVSReadTxt::readTimeSliceEventsVec(
     std::vector<double> &disparity_vector,
     dvs_msgs::EventArray &event_arr,
     cv::Mat &event_image_polarity,
+    cv::Mat &event_image_sum,
     cv::Mat &event_image_disp_gt,
     cv::Mat &event_ts,
     cv::Mat &event_ts_prev,
@@ -275,6 +290,8 @@ void DVSReadTxt::readTimeSliceEventsVec(
     cv::Mat &map1_y)
 {
 
+    double first_ts = event_vector.at(0).ts.toSec() + (event_vector.at(0).ts.toNSec() / 1e9);
+    // event_ts.setTo(first_ts);
     for (int i = start_index; i < event_vector.size(); i++)
     {
         dvs_msgs::Event tmp = event_vector.at(i);
@@ -289,39 +306,41 @@ void DVSReadTxt::readTimeSliceEventsVec(
             int row = tmp.y;
             int col = tmp.x;
             uchar polarity;
+
+            event_image_sum.at<uchar>(row, col) += 1;
             if (tmp.polarity)
             {
-#ifdef USE_NSAD
-                polarity = 1;
-#else
-                polarity = 255;
-#endif
+                #ifdef USE_NSAD
+                    polarity = 1;
+                #else
+                    polarity = 255;
+                #endif
             }
             else
             {
-#ifdef USE_NSAD
-                polarity = -1;
-#else
-                polarity = 0;
-#endif
+                #ifdef USE_NSAD
+                    polarity = -1;
+                #else
+                    polarity = 0;
+                #endif
             }
 
-#ifdef USE_TS
-            if (event_ts.at<double>(row, col) == 0)
-            {
-                event_ts.at<double>(row, col) = current_ts;
-            }
-            else
-            {
-                event_ts_prev.at<double>(row, col) = event_ts.at<double>(row, col);
-                event_ts.at<double>(row, col) = current_ts;
-            }
-#elif defined(USE_NSAD)
-            event_image_polarity.at<uchar>(row, col) += polarity;
-
-#else
-            event_image_polarity.at<uchar>(row, col) = polarity;
-#endif
+            #ifdef USE_TS
+                // if (event_ts.at<double>(row, col) == 0)
+                // {
+                    event_ts.at<double>(row, col) = current_ts;
+                // }
+                // else
+                // {
+                //     event_ts.at<double>(row, col) = current_ts;
+                //     event_ts_prev.at<double>(row, col) = event_ts.at<double>(row, col);
+                // }
+                event_image_polarity.at<uchar>(row, col) = polarity;
+            #elif defined(USE_NSAD)
+                event_image_polarity.at<uchar>(row, col) += polarity;
+            #else
+                event_image_polarity.at<uchar>(row, col) = polarity;
+            #endif
 
             event_image_disp_gt.at<double>(row, col) = disparity;
 
@@ -480,6 +499,13 @@ void DVSReadTxt::calcPublishDisparity(
                 continue; // skip processing
             }
 
+            #ifdef USE_NSAD
+                if (event_image_left_sum_.at<uchar>(y,x) == 0)
+                {
+                    continue;
+                }
+            #endif
+
             // if (event_image_polarity_left.at<uchar>(y, x) == left_empty_pixel_val_)
             // {
             //     continue; // skip processing
@@ -509,10 +535,10 @@ void DVSReadTxt::calcPublishDisparity(
                 double num_of_similar_pixels = 0;
                 double num_of_non_similar_pixels = 0;
 
-#ifdef USE_TS
                 int num_of_valid_pixels = 0;
-                double sum_abs_diff = 0;
-#endif
+                #ifdef USE_TS
+                    double sum_abs_diff = 0;
+                #endif
                 // Compute costs for the current disparity
                 for (int wy = -half_block; wy <= half_block; wy++)
                 {
@@ -521,35 +547,41 @@ void DVSReadTxt::calcPublishDisparity(
                         int left_polarity = event_image_polarity_left.at<uchar>(y + wy, x + wx);
                         int right_polarity = event_image_right_polarity_.at<uchar>(y + wy, x + wx - d);
 
-#ifdef USE_TS
-                        double left_ts = event_image_left_ts_.at<double>(y + wy, x + wx);
-                        double left_ts_prev = event_image_left_ts_prev_.at<double>(y + wy, x + wx);
-                        double right_ts = event_image_right_ts_.at<double>(y + wy, x + wx);
-                        double right_ts_prev = event_image_right_ts_prev_.at<double>(y + wy, x + wx);
-
-                        if (left_polarity == right_polarity)
-                        {
-                            num_of_valid_pixels++;
+                        #ifdef USE_TS
+                            double left_ts = event_image_left_ts_.at<double>(y + wy, x + wx);
+                            double left_ts_prev = event_image_left_ts_prev_.at<double>(y + wy, x + wx);
+                            double right_ts = event_image_right_ts_.at<double>(y + wy, x + wx - d);
+                            double right_ts_prev = event_image_right_ts_prev_.at<double>(y + wy, x + wx - d);
                             sum_abs_diff += std::abs(left_ts - right_ts);
-                        }
-#elif defined(USE_NSAD)
-                        cost += std::abs(left_polarity - right_polarity) / left_polarity + right_polarity;
-#else
-                        if (left_polarity != right_polarity)
-                        {
-                            num_of_non_similar_pixels++;
-                        }
-#endif
+
+                            if (left_polarity == right_polarity)
+                            {
+                                num_of_valid_pixels++;
+                            }
+                        #elif defined(USE_NSAD)
+                            int left_sum = event_image_left_sum_.at<uchar>(y + wy, x + wx);
+                            int right_sum = event_image_right_sum_.at<uchar>(y + wy, x + wx - d);
+                            if (left_sum != 0 && right_sum != 0)
+                            {
+                                num_of_valid_pixels++;
+                                cost += std::abs(left_polarity - right_polarity) / left_sum + right_sum;
+                            }                        
+                        #else
+                            if (left_polarity != right_polarity)
+                            {
+                                num_of_non_similar_pixels++;
+                            }
+                        #endif
                     }
                 }
 
-#ifdef USE_TS
-                cost = sum_abs_diff / num_of_valid_pixels;
-#elif defined(USE_NSAD)
-                cost = cost;
-#else
-                cost = num_of_non_similar_pixels / total_pixel;
-#endif
+                #ifdef USE_TS
+                    cost = sum_abs_diff / num_of_valid_pixels;
+                #elif defined(USE_NSAD)
+                    cost = cost/ num_of_valid_pixels;
+                #else
+                    cost = num_of_non_similar_pixels / total_pixel;
+                #endif
 
                 if (cost < min_cost)
                 {
@@ -560,29 +592,25 @@ void DVSReadTxt::calcPublishDisparity(
 
             if (best_disparity != 0)
             {
-                // double gt_disparity = left_gt_disparity.at<double>(y, x);
-                // number_of_left_events_estimated_++;
-                // if (std::abs(best_disparity - gt_disparity < 1))
-                // {
-                //     number_of_accurate_left_events_++;
-                // }
-                // file << y << "," << x << "," << best_disparity << "," << gt_disparity << "," << min_cost << "\n";
-                // disparity.at<double>(y, x) = (best_disparity * 255 / disparity_range_);
-
                 double disparity_out = (best_disparity * 255 / disparity_range_);
-                // disparity.at<double>(y, x) = disparity_out;
+                disparity.at<double>(y, x) = disparity_out;
 
-                // double depth = (FOCAL_LENGTH * BASELINE) / best_disparity; // Compute depth
-                // depth_map_.at<double>(y, x) = depth;
+                double gt_disparity = left_gt_disparity.at<double>(y, x);
+                number_of_left_events_estimated_++;
+                if (std::abs(best_disparity - gt_disparity < 1))
+                {
+                    number_of_accurate_left_events_++;
+                }
+                file << y << "," << x << "," << best_disparity << "," << gt_disparity << "," << min_cost << "\n";
                 
                 // disparity around this pixel is the same.
-                for (int i = y - 1; i < y + 1; i++)
-                {
-                    for (int j = x - 1; j < x + 1; j++)
-                    {
-                        disparity.at<double>(i, j) = disparity_out;
-                    }
-                }
+                // for (int i = y - 1; i < y + 1; i++)
+                // {
+                //     for (int j = x - 1; j < x + 1; j++)
+                //     {
+                //         disparity.at<double>(i, j) = disparity_out;
+                //     }
+                // }
             }
         }
     }
@@ -643,10 +671,21 @@ void DVSReadTxt::publishOnce(double start_time, double end_time)
 
     if (left_events_.size() > 1 && right_events_.size() > 1)
     {
-        event_image_left_polarity_.setTo(left_empty_pixel_val_);
+        #ifdef USE_NSAD
+            event_image_left_polarity_.setTo(0);
+        #else
+            event_image_left_polarity_.setTo(left_empty_pixel_val_);
+        #endif
+        event_image_left_sum_.setTo(0);
         disparity_gt_left_.setTo(0);
 
-        event_image_right_polarity_.setTo(right_empty_pixel_val_);
+
+        #ifdef USE_NSAD
+            event_image_right_polarity_.setTo(0);
+        #else
+            event_image_right_polarity_.setTo(right_empty_pixel_val_);
+        #endif
+        event_image_right_sum_.setTo(0);
         disparity_gt_right_.setTo(0);
 
         image_binary_map_.setTo(0);
@@ -659,6 +698,7 @@ void DVSReadTxt::publishOnce(double start_time, double end_time)
             left_disparity_values_,
             left_arr,
             event_image_left_polarity_,
+            event_image_left_sum_,
             disparity_gt_left_,
             event_image_left_ts_,
             event_image_left_ts_prev_,
@@ -673,6 +713,7 @@ void DVSReadTxt::publishOnce(double start_time, double end_time)
             right_disparity_values_,
             right_arr,
             event_image_right_polarity_,
+            event_image_right_sum_,
             disparity_gt_right_,
             event_image_right_ts_,
             event_image_right_ts_prev_,
@@ -822,8 +863,9 @@ void DVSReadTxt::loopOnce()
             float estimation_rate = (float)number_of_left_events_estimated_ / left_events_.size() * 100;
             float estimation_accuracy = (float)number_of_accurate_left_events_ / number_of_left_events_estimated_ * 100;
             std::cout << "number of left events: " << left_events_.size() << std::endl;
-            std::cout << "number_of_left_events_estimated_= " << number_of_left_events_estimated_ << ", number_of_accurate_left_events_ = " << number_of_accurate_left_events_ << std::endl;
-            std::cout << "Estimation rate = " << estimation_rate << ", estimation_accuracy = " << estimation_accuracy << std::endl;
+
+            // std::cout << "number_of_left_events_estimated_= " << number_of_left_events_estimated_ << ", number_of_accurate_left_events_ = " << number_of_accurate_left_events_ << std::endl;
+            // std::cout << "Estimation rate = " << estimation_rate << ", estimation_accuracy = " << estimation_accuracy << std::endl;
         }
         auto algo_end = high_resolution_clock::now();
         duration<double> algo_duration = algo_end - algo_start;

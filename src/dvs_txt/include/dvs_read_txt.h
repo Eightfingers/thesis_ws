@@ -33,6 +33,7 @@ public:
         std::vector<double> &disparity_vector,
         dvs_msgs::EventArray &event_arr,
         cv::Mat &event_image_polarity,
+        cv::Mat &event_image_sum,
         cv::Mat &event_image_disp_gt,
         cv::Mat &event_ts,
         cv::Mat &event_ts_prev,
@@ -133,10 +134,13 @@ private:
     // Image Processing Matrices
     cv::Mat color_map_;
     cv::Mat event_image_left_polarity_;
+    cv::Mat event_image_left_sum_;
     cv::Mat event_image_left_polarity_remmaped_;
     cv::Mat disparity_gt_left_;
+
     cv::Mat event_image_right_polarity_;
     cv::Mat event_image_right_polarity_remmaped_;
+    cv::Mat event_image_right_sum_;
     cv::Mat disparity_gt_right_;
     cv::Mat event_image_left_ts_;
     cv::Mat event_image_left_ts_prev_;

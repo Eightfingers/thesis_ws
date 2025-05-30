@@ -6,6 +6,7 @@ find_package(OpenMP REQUIRED)
 catkin_simple(ALL_DEPS_REQUIRED)
 
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -O3")
+set(CMAKE_BUILD_TYPE Debug)
 
 find_package(OpenCV REQUIRED)
 
