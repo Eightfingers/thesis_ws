@@ -14,6 +14,7 @@
 #include <dynamic_reconfigure/server.h>
 
 // #define USE_TS
+#define USE_TS2
 // #define USE_NSAD
 
 using std::chrono::duration;

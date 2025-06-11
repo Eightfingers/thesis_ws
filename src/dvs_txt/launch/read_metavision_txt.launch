@@ -14,8 +14,8 @@
   <param name="camera_width" type="int" value="1280" />
 
   <param name="file_path" type="string" value="/home/asdfg/thesis_ws/src/dvs_txt/resource/walking2.txt" />
-  <param name="left_csv_file_path" type="string" value="/home/asdfg/thesis_ws/src/dvs_txt/resource/master.csv" />
-  <param name="right_csv_file_path" type="string" value="/home/asdfg/thesis_ws/src/dvs_txt/resource/slave.csv" />
+  <param name="left_csv_file_path" type="string" value="/home/asus/thesis_ws/src/dvs_txt/resource/master.csv" />
+  <param name="right_csv_file_path" type="string" value="/home/asus/thesis_ws/src/dvs_txt/resource/slave.csv" />
 
   <param name="loop_rate" type="double" value="0.04" />
 

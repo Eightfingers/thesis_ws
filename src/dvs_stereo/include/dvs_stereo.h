@@ -17,6 +17,7 @@
 #include <dynamic_reconfigure/server.h>
 
 // #define DEBUG_MODE
+#define USE_TS2
 
 using std::chrono::duration;
 
@@ -33,8 +34,7 @@ private:
     void readEventArray(
         dvs_msgs::EventArray &event_array,
         cv::Mat &event_image_polarity,
-        cv::Mat &map_x, 
-        cv::Mat &map_y);
+        cv::Mat &event_ts);
 
     void applyNearestNeighborFilter(cv::Mat &event_image_pol, int value_of_empty_cell);
 
@@ -48,8 +48,10 @@ private:
 
     void calcPublishDisparity(
         cv::Mat &event_image_polarity_left,
-        cv::Mat &event_image_polarity_right);
-
+        cv::Mat &event_image_polarity_right,
+        cv::Mat &event_image_left_ts,
+        cv::Mat &event_image_right_ts);
+    
     void syncCallback(const dvs_msgs::EventArray::ConstPtr &msg1, const dvs_msgs::EventArray::ConstPtr &msg2);
 
     ros::NodeHandle nh_;
@@ -113,6 +115,7 @@ private:
     cv_bridge::CvImage rect_right_image_;
 
     image_transport::Publisher estimated_disparity_pub_;
+    image_transport::Publisher estimated_disparity_pub2_;
     image_transport::Publisher estimated_depth_pub_;
     image_transport::Publisher left_pol_image_pub_;
     image_transport::Publisher right_pol_image_pub_;
@@ -125,11 +128,17 @@ private:
 
     cv::Mat depth_map_;
     cv::Mat disparity_;
+    cv::Mat disparity2_;
 
     cv::Mat event_image_left_;
     cv::Mat event_image_left_polarity_remmaped_;
     cv::Mat event_image_left_polarity_;
     
+    cv::Mat event_image_left_ts_;
+    cv::Mat event_image_left_ts_remapped_;
+    cv::Mat event_image_right_ts_;
+    cv::Mat event_image_right_ts_remapped_;
+
     cv::Mat event_image_right_;
     cv::Mat event_image_right_polarity_remmaped_;
     cv::Mat event_image_right_polarity_;

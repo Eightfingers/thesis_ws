@@ -58,6 +58,7 @@ DVSStereo::DVSStereo(ros::NodeHandle &nh, ros::NodeHandle nh_private) : nh_(nh),
 
     image_transport::ImageTransport it_(nh);
     estimated_disparity_pub_ = it_.advertise("left_disparity", 1);
+    estimated_disparity_pub2_ = it_.advertise("left_disparity2", 1);
     left_pol_image_pub_ = it_.advertise("left_pol_image", 1);
     right_pol_image_pub_ = it_.advertise("right_pol_image", 1);
     estimated_depth_pub_ = it_.advertise("left_depth_map", 1);
@@ -84,13 +85,18 @@ DVSStereo::DVSStereo(ros::NodeHandle &nh, ros::NodeHandle nh_private) : nh_(nh),
     event_image_left_ = cv::Mat(image_size_, CV_8U, cv::Scalar(0));
     event_image_left_polarity_ = cv::Mat(image_size_, CV_8U, cv::Scalar(left_empty_pixel_val_));
     event_image_left_polarity_remmaped_ = cv::Mat(image_size_, CV_8U, cv::Scalar(left_empty_pixel_val_));
+    event_image_left_ts_ = cv::Mat(image_size_, CV_64F, cv::Scalar(0));
+    event_image_left_ts_remapped_ = cv::Mat(image_size_, CV_8U, cv::Scalar(left_empty_pixel_val_));
 
     event_image_right_ = cv::Mat(image_size_, CV_8U, cv::Scalar(0));
     event_image_right_polarity_ = cv::Mat(image_size_, CV_8U, cv::Scalar(right_empty_pixel_val_));
     event_image_right_polarity_remmaped_ = cv::Mat(image_size_, CV_8U, cv::Scalar(right_empty_pixel_val_));
+    event_image_right_ts_ = cv::Mat(image_size_, CV_64F, cv::Scalar(0));
+    event_image_right_ts_remapped_ = cv::Mat(image_size_, CV_8U, cv::Scalar(right_empty_pixel_val_));
 
     disparity_color_map_ = cv::Mat(cropped_image_size_, CV_8U, cv::Scalar(0));
     disparity_ = cv::Mat(cropped_image_size_, CV_8U, cv::Scalar(0));
+    disparity2_ = cv::Mat(cropped_image_size_, CV_8U, cv::Scalar(0));
     depth_map_ = cv::Mat(cropped_image_size_, CV_32F, cv::Scalar(0));
 
     sobel_x_ = cv::Mat::zeros(image_size_, CV_64F);
@@ -121,12 +127,17 @@ void DVSStereo::publishOnce()
 
     event_image_left_polarity_.setTo(left_empty_pixel_val_);
     event_image_left_polarity_remmaped_.setTo(left_empty_pixel_val_);
+    event_image_left_ts_.setTo(0);
+    event_image_left_ts_remapped_.setTo(0);
 
     event_image_right_polarity_.setTo(right_empty_pixel_val_);
     event_image_right_polarity_remmaped_.setTo(right_empty_pixel_val_);
+    event_image_right_ts_.setTo(0);
+    event_image_right_ts_remapped_.setTo(0);
 
     depth_map_.setTo(0);
     disparity_.setTo(0);
+    disparity2_.setTo(0);
     // image_binary_map_.setTo(0);
     // image_binary_map_ = cv::Mat::zeros(event_image_right_polarity_.size(), CV_8U);
 
@@ -134,13 +145,11 @@ void DVSStereo::publishOnce()
 
     readEventArray(left_events_,
                    event_image_left_polarity_,
-                   map_slave_x,
-                   map_slave_y);
+                   event_image_left_ts_);
 
     readEventArray(right_events_,
                    event_image_right_polarity_,
-                   map_slave_x,
-                   map_slave_y);
+                   event_image_right_ts_);
 
     auto end_time_read = std::chrono::high_resolution_clock::now();
     auto duration_read = std::chrono::duration_cast<std::chrono::microseconds>(end_time_read - start_time_read);
@@ -158,11 +167,15 @@ void DVSStereo::publishOnce()
 
         cv::remap(event_image_right_polarity_, event_image_right_polarity_remmaped_, map_master_x, map_master_y, cv::INTER_NEAREST);
         cv::remap(event_image_left_polarity_, event_image_left_polarity_remmaped_, map_slave_x, map_slave_y, cv::INTER_NEAREST);
+        cv::remap(event_image_left_ts_, event_image_left_ts_remapped_, map_master_x, map_master_y, cv::INTER_NEAREST);
+        cv::remap(event_image_right_ts_, event_image_right_ts_remapped_, map_slave_x, map_slave_y, cv::INTER_NEAREST);
 
         // Crop the image
         event_image_left_polarity_remmaped_  = event_image_left_polarity_remmaped_(crop_region_);
-        event_image_right_polarity_remmaped_  = event_image_right_polarity_remmaped_(crop_region_);
-        
+        event_image_right_polarity_remmaped_  = event_image_right_polarity_remmaped_(crop_region_);        
+        event_image_left_ts_remapped_  = event_image_left_ts_remapped_(crop_region_);
+        event_image_right_ts_remapped_  = event_image_right_ts_remapped_(crop_region_);
+
         auto end_time_map = std::chrono::high_resolution_clock::now();
         auto duration_map = std::chrono::duration_cast<std::chrono::microseconds>(end_time_map - start_time_map);
         
@@ -177,6 +190,8 @@ void DVSStereo::publishOnce()
     {
         event_image_left_polarity_remmaped_ = event_image_left_polarity_;
         event_image_right_polarity_remmaped_ = event_image_right_polarity_;
+        event_image_left_ts_remapped_ = event_image_left_ts_;
+        event_image_right_ts_remapped_ = event_image_right_ts_;
     }
 
     auto start_time_adapt = std::chrono::high_resolution_clock::now();
@@ -200,23 +215,29 @@ void DVSStereo::publishOnce()
     {
         calcPublishDisparity(
             event_image_left_polarity_remmaped_,
-            event_image_right_polarity_remmaped_);
+            event_image_right_polarity_remmaped_,
+            event_image_left_ts_remapped_,
+            event_image_right_ts_remapped_);
     }
 }
 
-void DVSStereo::readEventArray(dvs_msgs::EventArray &event_array, cv::Mat &event_image_polarity, cv::Mat &map_x, cv::Mat &map_y)
+void DVSStereo::readEventArray(dvs_msgs::EventArray &event_array, cv::Mat &event_image_polarity, cv::Mat &event_ts)
 {
     const size_t num_events = event_array.events.size();
     for (int i = 0; i < num_events; i++)
     {
         const dvs_msgs::Event& tmp = event_array.events[i]; 
-        
-        if (tmp.polarity){
-            event_image_polarity.at<uchar>(tmp.y, tmp.x) = 255;
+        int row = tmp.y;
+        int col = tmp.x;
+        double current_ts = tmp.ts.toSec() + (tmp.ts.toNSec() / 1e9);
+        event_ts.at<double>(row, col) = current_ts;
+        if (tmp.polarity)
+        {
+            event_image_polarity.at<uchar>(row, col) = 255;
         }
         else
         {
-            event_image_polarity.at<uchar>(tmp.y, tmp.x) = 0;
+            event_image_polarity.at<uchar>(row, col) = 0;
         }
     }
 }
@@ -311,7 +332,9 @@ void DVSStereo::createAdaptiveWindowMap(cv::Mat &event_image_pol, cv::Mat &sobel
 
 void DVSStereo::calcPublishDisparity(
     cv::Mat &event_image_polarity_left,
-    cv::Mat &event_image_polarity_right)
+    cv::Mat &event_image_polarity_right,
+    cv::Mat &event_image_left_ts,
+    cv::Mat &event_image_right_ts)
 {
     // Window-based disparity calculation
     auto start_time_disp = std::chrono::high_resolution_clock::now();
@@ -368,6 +391,9 @@ void DVSStereo::calcPublishDisparity(
             int best_disparity = 0;
             double min_sad = 10000000;
 
+            int best_disparity2 = 0;
+            double min_sad2 = 10000000;
+
             // Compare blocks at different disparities
             for (int d = 0; d < disparity_range_; d += disparity_step_)
             {
@@ -379,6 +405,9 @@ void DVSStereo::calcPublishDisparity(
                 double cost = 0;
                 double num_of_non_similar_pixels = 0;
 
+                double cost2 = 0;
+                double sum_abs_diff = 0;
+                int num_of_valid_pixels = 0;
                 // Window for the current disparity
                 for (int wy = -half_block; wy <= half_block; wy++)
                 {
@@ -389,11 +418,16 @@ void DVSStereo::calcPublishDisparity(
                         {
                             num_of_non_similar_pixels++;
                         }
+                        
+                        // Calc for TS 2
+                        double left_ts = event_image_left_ts.at<double>(y + wy, x + wx);
+                        double right_ts = event_image_right_ts.at<double>(y + wy, x + wx - d);
+                        sum_abs_diff += std::abs(left_ts - right_ts);
+                        if ( event_image_polarity_left.at<uchar>(px_y, x + wx) == event_image_polarity_right.at<uchar>(px_y, x + wx - d) )
+                        {
+                            num_of_valid_pixels++;
+                        }
 
-                        // if ((event_image_polarity_left.data[ ((y + wy) * event_image_polarity_left.cols) + x + wx] != event_image_polarity_right.data[((y + wy) * event_image_polarity_left.cols) + x + wx - d]))
-                        // {
-                        //     num_of_non_similar_pixels++;
-                        // }
                     }
                 }
 
@@ -403,22 +437,19 @@ void DVSStereo::calcPublishDisparity(
                     min_sad = cost;
                     best_disparity = d;
                 }
+
+                cost2 = sum_abs_diff / num_of_valid_pixels;
+                if (cost2 < min_sad2)
+                {
+                    min_sad2 = cost2;
+                    best_disparity2 = d;
+                }
             }
 
             if (best_disparity != 0)
             {
                 double disparity_out = (best_disparity * 255 / disparity_range_);
-                // disparity_.at<uchar>(y-1, x-1) = disparity_out;
-                // disparity_.at<uchar>(y-1, x) = disparity_out;
-                // disparity_.at<uchar>(y-1, x+1) = disparity_out;
-
-                // disparity_.at<uchar>(y, x-1) = disparity_out;
-                // disparity_.at<uchar>(y, x) = disparity_out;
-                // disparity_.at<uchar>(y, x+1) = disparity_out;
-
-                // disparity_.at<uchar>(y+1, x-1) = disparity_out;
-                // disparity_.at<uchar>(y+1, x) = disparity_out;
-                // disparity_.at<uchar>(y+1, x+1) = disparity_out;
+                double disparity_out2 = (best_disparity2 * 255 / disparity_range_);
 
                 // double depth = (FOCAL_LENGTH * BASELINE) / best_disparity; // Compute depth
                 
@@ -429,7 +460,7 @@ void DVSStereo::calcPublishDisparity(
                     for (int j = x - window_fill_size_; j <= x + window_fill_size_; j++)
                     {
                         disparity_.at<uchar>(i, j) = disparity_out;
-                        
+                        disparity2_.at<uchar>(i, j) = disparity_out2;
                         // depth_map_.at<double>(i, j) = depth;
                     }
                 }
@@ -438,10 +469,10 @@ void DVSStereo::calcPublishDisparity(
     }
 
     #ifdef DEBUG_MODE
-    event_image_left_polarity_remmaped_.copyTo(left_pol_image_.image);
-    left_pol_image_pub_.publish(left_pol_image_.toImageMsg());
-    event_image_right_polarity_remmaped_.copyTo(right_pol_image_.image);
-    right_pol_image_pub_.publish(right_pol_image_.toImageMsg());
+        event_image_left_polarity_remmaped_.copyTo(left_pol_image_.image);
+        left_pol_image_pub_.publish(left_pol_image_.toImageMsg());
+        event_image_right_polarity_remmaped_.copyTo(right_pol_image_.image);
+        right_pol_image_pub_.publish(right_pol_image_.toImageMsg());
     #endif
     
     // cv::reprojectImageTo3D(disparity_, depth_map_, Q);
@@ -453,6 +484,11 @@ void DVSStereo::calcPublishDisparity(
     disparity_color_map_.copyTo(cv_image_disparity_.image);
     estimated_disparity_pub_.publish(cv_image_disparity_.toImageMsg());
 
+    cv::applyColorMap(disparity2_, disparity_color_map_, cv::COLORMAP_JET); // convert to colour map
+    mask = (disparity2_ == 0); // Binary mask where disparity is 0
+    disparity_color_map_.setTo(cv::Vec3b(0, 0, 0), mask); // Set to black using the mask
+    disparity_color_map_.copyTo(cv_image_disparity_.image);
+    estimated_disparity_pub2_.publish(cv_image_disparity_.toImageMsg());
 
     // cv::normalize(depth_map_, depth_map_, 0, 255, cv::NORM_MINMAX, CV_8U);
     // depth_map_.copyTo(cv_image_depth_.image);

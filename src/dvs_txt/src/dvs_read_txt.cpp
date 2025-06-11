@@ -92,8 +92,8 @@ DVSReadTxt::DVSReadTxt(ros::NodeHandle &nh, ros::NodeHandle nh_private) : nh_(nh
         event_image_right_polarity_ = cv::Mat(image_size, CV_8U, cv::Scalar(0));
         event_image_right_polarity_remmaped_ = cv::Mat(image_size, CV_8U, cv::Scalar(0));
     #else
-        event_image_right_polarity_ = cv::Mat(image_size, CV_8U, cv::Scalar(left_empty_pixel_val_));
-        event_image_right_polarity_remmaped_ = cv::Mat(image_size, CV_8U, cv::Scalar(left_empty_pixel_val_));
+        event_image_right_polarity_ = cv::Mat(image_size, CV_8U, cv::Scalar(right_empty_pixel_val_));
+        event_image_right_polarity_remmaped_ = cv::Mat(image_size, CV_8U, cv::Scalar(right_empty_pixel_val_));
     #endif
     event_image_right_sum_ = cv::Mat(image_size, CV_8U, cv::Scalar(0));
     disparity_gt_right_ = cv::Mat(image_size, CV_64F, cv::Scalar(0));
@@ -289,9 +289,9 @@ void DVSReadTxt::readTimeSliceEventsVec(
     cv::Mat &map1_x,
     cv::Mat &map1_y)
 {
-
+    
     double first_ts = event_vector.at(0).ts.toSec() + (event_vector.at(0).ts.toNSec() / 1e9);
-    // event_ts.setTo(first_ts);
+    event_ts.setTo(first_ts); // variable only used in USE_TS or USE_TS2 macro conditional
     for (int i = start_index; i < event_vector.size(); i++)
     {
         dvs_msgs::Event tmp = event_vector.at(i);
@@ -335,6 +335,9 @@ void DVSReadTxt::readTimeSliceEventsVec(
                 //     event_ts.at<double>(row, col) = current_ts;
                 //     event_ts_prev.at<double>(row, col) = event_ts.at<double>(row, col);
                 // }
+                event_image_polarity.at<uchar>(row, col) = polarity;
+            #elif defined(USE_TS2)
+                event_ts.at<double>(row, col) = current_ts;
                 event_image_polarity.at<uchar>(row, col) = polarity;
             #elif defined(USE_NSAD)
                 event_image_polarity.at<uchar>(row, col) += polarity;
@@ -536,9 +539,7 @@ void DVSReadTxt::calcPublishDisparity(
                 double num_of_non_similar_pixels = 0;
 
                 int num_of_valid_pixels = 0;
-                #ifdef USE_TS
-                    double sum_abs_diff = 0;
-                #endif
+                double sum_abs_diff = 0;
                 // Compute costs for the current disparity
                 for (int wy = -half_block; wy <= half_block; wy++)
                 {
@@ -549,9 +550,20 @@ void DVSReadTxt::calcPublishDisparity(
 
                         #ifdef USE_TS
                             double left_ts = event_image_left_ts_.at<double>(y + wy, x + wx);
-                            double left_ts_prev = event_image_left_ts_prev_.at<double>(y + wy, x + wx);
                             double right_ts = event_image_right_ts_.at<double>(y + wy, x + wx - d);
-                            double right_ts_prev = event_image_right_ts_prev_.at<double>(y + wy, x + wx - d);
+
+                            // double left_ts_prev = event_image_left_ts_prev_.at<double>(y + wy, x + wx);
+                            // double right_ts_prev = event_image_right_ts_prev_.at<double>(y + wy, x + wx - d);
+                            if (left_polarity == right_polarity)
+                            {
+                                sum_abs_diff += std::abs(left_ts - right_ts);
+                                num_of_valid_pixels++;
+                            }
+                        #elif defined(USE_TS2)
+                            double left_ts = event_image_left_ts_.at<double>(y + wy, x + wx);
+                            double right_ts = event_image_right_ts_.at<double>(y + wy, x + wx - d);
+                            // double left_ts_prev = event_image_left_ts_prev_.at<double>(y + wy, x + wx);
+                            // double right_ts_prev = event_image_right_ts_prev_.at<double>(y + wy, x + wx - d);
                             sum_abs_diff += std::abs(left_ts - right_ts);
 
                             if (left_polarity == right_polarity)
@@ -577,6 +589,8 @@ void DVSReadTxt::calcPublishDisparity(
 
                 #ifdef USE_TS
                     cost = sum_abs_diff / num_of_valid_pixels;
+                #elif defined(USE_TS2)
+                    cost = sum_abs_diff/ num_of_valid_pixels;
                 #elif defined(USE_NSAD)
                     cost = cost/ num_of_valid_pixels;
                 #else
@@ -679,7 +693,6 @@ void DVSReadTxt::publishOnce(double start_time, double end_time)
         event_image_left_sum_.setTo(0);
         disparity_gt_left_.setTo(0);
 
-
         #ifdef USE_NSAD
             event_image_right_polarity_.setTo(0);
         #else
@@ -687,7 +700,6 @@ void DVSReadTxt::publishOnce(double start_time, double end_time)
         #endif
         event_image_right_sum_.setTo(0);
         disparity_gt_right_.setTo(0);
-
         image_binary_map_.setTo(0);
 
         readTimeSliceEventsVec(
@@ -800,7 +812,7 @@ void DVSReadTxt::publishOnce(double start_time, double end_time)
     left_event_arr_pub_.publish(left_arr);
     right_event_arr_pub_.publish(right_arr);
 
-#ifdef USE_TS
+
     cv::Mat colour_map_left_;
     cv::Mat tmp_left;
     event_image_left_ts_.copyTo(tmp_left);
@@ -820,7 +832,6 @@ void DVSReadTxt::publishOnce(double start_time, double end_time)
     cv::applyColorMap(tmp_right, colour_map_right_, cv::COLORMAP_BONE); // convert to colour map
     colour_map_right_.copyTo(cv_image_ts_.image);
     debug_img_ts_right_pub_.publish(cv_image_ts_.toImageMsg());
-#endif
 }
 
 void DVSReadTxt::loopOnce()
@@ -862,10 +873,9 @@ void DVSReadTxt::loopOnce()
             // Print out stats
             float estimation_rate = (float)number_of_left_events_estimated_ / left_events_.size() * 100;
             float estimation_accuracy = (float)number_of_accurate_left_events_ / number_of_left_events_estimated_ * 100;
-            std::cout << "number of left events: " << left_events_.size() << std::endl;
-
-            // std::cout << "number_of_left_events_estimated_= " << number_of_left_events_estimated_ << ", number_of_accurate_left_events_ = " << number_of_accurate_left_events_ << std::endl;
-            // std::cout << "Estimation rate = " << estimation_rate << ", estimation_accuracy = " << estimation_accuracy << std::endl;
+            std::cout << "**Number of left events: " << left_events_.size() << std::endl;
+            std::cout << "**Number_of_left_events_estimated_= " << number_of_left_events_estimated_ << ", number_of_accurate_left_events_ = " << number_of_accurate_left_events_ << std::endl;
+            std::cout << "**Estimation rate = " << estimation_rate << ", estimation_accuracy = " << estimation_accuracy << std::endl;
         }
         auto algo_end = high_resolution_clock::now();
         duration<double> algo_duration = algo_end - algo_start;
