@@ -446,12 +446,12 @@ void DVSStereo::calcPublishDisparity(
                     }
                 }
 
-                cost = num_of_non_similar_pixels / window_total_pixel;
-                if (cost < min_sad)
-                {
-                    min_sad = cost;
-                    best_disparity = d;
-                }
+                // cost = num_of_non_similar_pixels / window_total_pixel;
+                // if (cost < min_sad)
+                // {
+                //     min_sad = cost;
+                //     best_disparity = d;
+                // }
 
                 cost2 = sum_abs_diff / num_of_valid_pixels;
                 if (cost2 < min_sad2)
@@ -461,7 +461,7 @@ void DVSStereo::calcPublishDisparity(
                 }
             }
 
-            if (best_disparity != 0)
+            if (best_disparity2 != 0)
             {
                 // double disparity_out = (best_disparity * 255 / disparity_range_);
                 double disparity_out2 = (best_disparity2 * 255 / disparity_range_);
