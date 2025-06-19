@@ -430,10 +430,10 @@ void DVSStereo::calcPublishDisparity(
                     int px_y = y + wy;
                     for (int wx = -half_block; wx <= half_block; wx++)
                     {                        
-                        if ((event_image_polarity_left.at<uchar>(px_y, x + wx) != event_image_polarity_right.at<uchar>(px_y, x + wx - d)))
-                        {
-                            num_of_non_similar_pixels++;
-                        }
+                        // if ((event_image_polarity_left.at<uchar>(px_y, x + wx) != event_image_polarity_right.at<uchar>(px_y, x + wx - d)))
+                        // {
+                        //     num_of_non_similar_pixels++;
+                        // }
                         
                         // Calc for TS 2
                         double left_ts = event_image_left_ts.at<double>(y + wy, x + wx);
@@ -463,7 +463,7 @@ void DVSStereo::calcPublishDisparity(
 
             if (best_disparity != 0)
             {
-                double disparity_out = (best_disparity * 255 / disparity_range_);
+                // double disparity_out = (best_disparity * 255 / disparity_range_);
                 double disparity_out2 = (best_disparity2 * 255 / disparity_range_);
 
                 // double depth = (FOCAL_LENGTH * BASELINE) / best_disparity; // Compute depth
@@ -474,7 +474,7 @@ void DVSStereo::calcPublishDisparity(
                 {
                     for (int j = x - window_fill_size_; j <= x + window_fill_size_; j++)
                     {
-                        disparity_.at<uchar>(i, j) = disparity_out;
+                        // disparity_.at<uchar>(i, j) = disparity_out;
                         disparity2_.at<uchar>(i, j) = disparity_out2;
                         // depth_map_.at<double>(i, j) = depth;
                     }
@@ -490,14 +490,12 @@ void DVSStereo::calcPublishDisparity(
         right_pol_image_pub_.publish(right_pol_image_.toImageMsg());
     #endif
     
-    // cv::reprojectImageTo3D(disparity_, depth_map_, Q);
-    // disparity_ = 255 - (disparity_ * 255 / disparity_range_);
-    cv::applyColorMap(disparity_, disparity_color_map_, cv::COLORMAP_JET); // convert to colour map
-    cv::Mat mask = (disparity_ == 0); // Binary mask where disparity is 0
-    disparity_color_map_.setTo(cv::Vec3b(0, 0, 0), mask); // Set to black using the mask
-    
-    disparity_color_map_.copyTo(cv_image_disparity_.image);
-    estimated_disparity_pub_.publish(cv_image_disparity_.toImageMsg());
+
+    // cv::applyColorMap(disparity_, disparity_color_map_, cv::COLORMAP_JET); // convert to colour map
+    // cv::Mat mask = (disparity_ == 0); // Binary mask where disparity is 0
+    // disparity_color_map_.setTo(cv::Vec3b(0, 0, 0), mask); // Set to black using the mask
+    // disparity_color_map_.copyTo(cv_image_disparity_.image);
+    // estimated_disparity_pub_.publish(cv_image_disparity_.toImageMsg());
 
     cv::applyColorMap(disparity2_, disparity_color_map_, cv::COLORMAP_JET); // convert to colour map
     mask = (disparity2_ == 0); // Binary mask where disparity is 0
