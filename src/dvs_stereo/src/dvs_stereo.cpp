@@ -498,7 +498,7 @@ void DVSStereo::calcPublishDisparity(
     // estimated_disparity_pub_.publish(cv_image_disparity_.toImageMsg());
 
     cv::applyColorMap(disparity2_, disparity_color_map_, cv::COLORMAP_JET); // convert to colour map
-    mask = (disparity2_ == 0); // Binary mask where disparity is 0
+    cv::Mat mask = (disparity2_ == 0); // Binary mask where disparity is 0
     disparity_color_map_.setTo(cv::Vec3b(0, 0, 0), mask); // Set to black using the mask
     disparity_color_map_.copyTo(cv_image_disparity_.image);
     estimated_disparity_pub2_.publish(cv_image_disparity_.toImageMsg());
