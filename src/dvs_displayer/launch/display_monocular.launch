@@ -1,0 +1,63 @@
+<launch>
+
+  <!-- <node name="dvs_displayer_one_bot" pkg="dvs_displayer" type="dvs_displayer" output="screen">
+    <param name="display_method" value="red-blue"/>
+    <remap from="events" to="/event_cam_0/events_dvs" />
+    <remap from="image" to="/dvs/image_raw_bot" />
+    <remap from="event_image" to="event_image_bot" />
+  </node>
+
+  <node name="dvs_displayer_one_top" pkg="dvs_displayer" type="dvs_displayer" output="screen">
+    <param name="display_method" value="red-blue"/>
+    <remap from="events" to="/event_cam_1/events_dvs" />
+    <remap from="image" to="/dvs/image_raw_top" />
+    <remap from="event_image" to="event_image_top" /> 
+  </node> -->
+
+  <!-- <node name="image_view_left" pkg="rqt_image_view" type="rqt_image_view">
+  	<remap from="image" to="event_image"/>
+  </node> -->
+
+  <!-- <node name="dvs_displayer_one_bot" pkg="dvs_displayer" type="dvs_displayer" output="screen">
+    <param name="display_method" value="red-blue"/>
+    <remap from="events" to="/republished_bot/events_dvs" />
+    <remap from="image" to="/dvs/image_raw_bot" />
+    <remap from="event_image" to="event_image_bot" />
+  </node>
+
+  <node name="dvs_displayer_one_top" pkg="dvs_displayer" type="dvs_displayer" output="screen">
+    <param name="display_method" value="red-blue"/>
+    <remap from="events" to="/republished_top/events_dvs" />
+    <remap from="image" to="/dvs/image_raw_top" />
+    <remap from="event_image" to="event_image_top" />
+  </node> -->
+
+  <node name="dvs_displayer_one_bot" pkg="dvs_displayer" type="dvs_displayer" output="screen">
+    <param name="display_method" value="blackwhite"/>
+    <remap from="events" to="/event_out_left/slave" />
+    <remap from="image" to="/dvs/image_raw_left" />
+    <remap from="event_image" to="event_image_left" />
+  </node>
+
+  <node name="dvs_displayer_one_top" pkg="dvs_displayer" type="dvs_displayer" output="screen">
+    <param name="display_method" value="blackwhite"/>
+    <remap from="events" to="/event_out_right/master" />
+    <remap from="image" to="/dvs/image_raw_right" />
+    <remap from="event_image" to="event_image_right" />
+  </node>
+
+  <!-- <node name="dvs_displayer_one_bot" pkg="dvs_displayer" type="dvs_displayer" output="screen">
+    <param name="display_method" value="red-blue"/>
+    <remap from="events" to="/event_cam_1/events_dvs" />
+    <remap from="image" to="/dvs/image_raw_bot" />
+    <remap from="event_image" to="event_image_bot" />
+  </node> -->
+
+  <!-- <node name="dvs_displayer_one_top" pkg="dvs_displayer" type="dvs_displayer" output="screen">
+    <param name="display_method" value="red-blue"/>
+    <remap from="events" to="/event_cam_0/events_dvs" />
+    <remap from="image" to="/dvs/image_raw_top" />
+    <remap from="event_image" to="event_image_top" />
+  </node> -->
+
+</launch>
