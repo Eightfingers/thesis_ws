@@ -113,6 +113,7 @@ private:
     cv_bridge::CvImage right_pol_image_;
     cv_bridge::CvImage rect_left_image_;
     cv_bridge::CvImage rect_right_image_;
+    cv_bridge::CvImage sobel_debug_image_;
 
     image_transport::Publisher estimated_disparity_pub_;
     image_transport::Publisher estimated_disparity_pub2_;
@@ -121,6 +122,7 @@ private:
     image_transport::Publisher right_pol_image_pub_;
     image_transport::Publisher rect_left_image_pub_;
     image_transport::Publisher rect_right_image_pub_;
+    image_transport::Publisher sobel_img_pub_;
 
     int disparity_range_ ; // Maximum disparity
     int step_size_;

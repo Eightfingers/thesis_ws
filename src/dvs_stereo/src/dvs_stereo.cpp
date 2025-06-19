@@ -62,6 +62,10 @@ DVSStereo::DVSStereo(ros::NodeHandle &nh, ros::NodeHandle nh_private) : nh_(nh),
     left_pol_image_pub_ = it_.advertise("left_pol_image", 1);
     right_pol_image_pub_ = it_.advertise("right_pol_image", 1);
     estimated_depth_pub_ = it_.advertise("left_depth_map", 1);
+    sobel_img_pub_ = it_.advertise("sobel_img", 1);
+
+    sobel_debug_image_.encoding = "mono8";
+    sobel_debug_image_.image = cv::Mat(image_size_, CV_32F, cv::Scalar(0));
 
     rect_left_image_.encoding = "mono8";
     rect_left_image_.image = cv::Mat(image_size_, CV_32F, cv::Scalar(0));
@@ -224,9 +228,12 @@ void DVSStereo::publishOnce()
 void DVSStereo::readEventArray(dvs_msgs::EventArray &event_array, cv::Mat &event_image_polarity, cv::Mat &event_ts)
 {
     const size_t num_events = event_array.events.size();
+    const dvs_msgs::Event start_event = event_array.events[0]; 
+    double start_ts = start_event.ts.toSec() + (start_event.ts.toNSec() / 1e9);
+    event_ts.setTo(start_ts);
     for (int i = 0; i < num_events; i++)
     {
-        const dvs_msgs::Event& tmp = event_array.events[i]; 
+        const dvs_msgs::Event tmp = event_array.events[i]; 
         int row = tmp.y;
         int col = tmp.x;
         double current_ts = tmp.ts.toSec() + (tmp.ts.toNSec() / 1e9);
@@ -306,6 +313,15 @@ void DVSStereo::createAdaptiveWindowMap(cv::Mat &event_image_pol, cv::Mat &sobel
 
     cv::Mat gradient_magnitude;
     cv::magnitude(sobel_x, sobel_y, gradient_magnitude);
+
+    // Convert to displayable range
+    cv::Mat tmp;
+    tmp = gradient_magnitude.clone();
+    cv::normalize(tmp, tmp, 0, 255, cv::NORM_MINMAX, CV_8U);
+
+    tmp.copyTo(sobel_debug_image_.image);
+    sobel_img_pub_.publish(sobel_debug_image_.toImageMsg());
+
 
     // Convert to displayable range
     // cv::Mat tmp;
@@ -427,7 +443,6 @@ void DVSStereo::calcPublishDisparity(
                         {
                             num_of_valid_pixels++;
                         }
-
                     }
                 }
 
