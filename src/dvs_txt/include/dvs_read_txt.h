@@ -76,6 +76,8 @@ public:
         cv::Mat &left_gt_disparity,
         std::ofstream &file);
 
+    void calcPublishDisparity2(cv::Mat &event_image_polarity_left, cv::Mat &event_image_polarity_right, cv::Mat &left_gt_disparity, std::ofstream &file);
+
     void sparseRemap(cv::Mat &event_image, cv::Mat &remapped_image, cv::Mat &map1_x, cv::Mat &map1_y, int empty_pixel_value);
 
     void publishOnce(double start_time, double end_time);
@@ -157,6 +159,7 @@ private:
     int threshold_edge_;
     // Search range
     int disparity_range_;
+    int disparity_step_ = 2;
 
     // Image Processing Matrices
     cv::Mat color_map_;

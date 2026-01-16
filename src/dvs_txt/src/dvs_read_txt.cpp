@@ -38,6 +38,7 @@ DVSReadTxt::DVSReadTxt(ros::NodeHandle &nh, ros::NodeHandle nh_private) : nh_(nh
     nh_private.param<int>("NN_min_num_of_events", NN_min_num_of_events_, 3);
     nh_private.param<int>("threshold_edge", threshold_edge_, 50);
     nh_private.param<int>("large_block_size", window_size_, 11);
+    nh_private.param<int>("disparity_step", disparity_step_, 2);
 
     std::cout << "NN_min_num_of_events_.. " << NN_min_num_of_events_ << std::endl;
     std::cout << "do_NN_.. " << do_NN_ << std::endl;
@@ -583,6 +584,20 @@ void DVSReadTxt::calcPublishDisparity(
     uchar *p_right;
     uchar *p_left_inner;
     uchar *p_right_inner;
+
+    int best_disparity = 0;
+    double min_cost = 10000000;
+    
+    double cost = 0;
+    double num_of_similar_pixels = 0;
+    double num_of_non_similar_pixels = 0;
+
+    int num_of_valid_pixels = 0;
+    double sum_abs_diff = 0;     
+    
+    int left_polarity = 0;
+    int right_polarity = 0;
+
     for (int y = half_block; y < total_rows; y += 1)
     {
         p_left = event_image_polarity_left.ptr<uchar>(y);
@@ -614,11 +629,11 @@ void DVSReadTxt::calcPublishDisparity(
             num_of_events++;
 
             // Window calculation
-            int best_disparity = 0;
-            double min_cost = 10000000;
+            best_disparity = 0;
+            min_cost = 10000000;
 
             // Compare blocks at different disparities
-            for (int d = 0; d < disparity_range_; d++)
+            for (int d = 0; d < disparity_range_; d += disparity_step_)
             {
 
                 if (x - half_block - d < 0)
@@ -626,19 +641,19 @@ void DVSReadTxt::calcPublishDisparity(
                     continue; // Skip
                 }
 
-                double cost = 0;
-                double num_of_similar_pixels = 0;
-                double num_of_non_similar_pixels = 0;
+                cost = 0;
+                num_of_similar_pixels = 0;
+                num_of_non_similar_pixels = 0;
 
-                int num_of_valid_pixels = 0;
-                double sum_abs_diff = 0;
+                num_of_valid_pixels = 0;
+                sum_abs_diff = 0;                
                 // Compute costs for the current disparity
                 for (int wy = -half_block; wy <= half_block; wy++)
                 {
                     for (int wx = -half_block; wx <= half_block; wx++)
                     {
-                        int left_polarity = event_image_polarity_left.at<uchar>(y + wy, x + wx);
-                        int right_polarity = event_image_right_polarity_.at<uchar>(y + wy, x + wx - d);
+                        left_polarity = event_image_polarity_left.at<uchar>(y + wy, x + wx);
+                        right_polarity = event_image_right_polarity_.at<uchar>(y + wy, x + wx - d);
 
 #ifdef USE_TS
                         double left_ts = event_image_left_ts_.at<double>(y + wy, x + wx);
@@ -737,6 +752,297 @@ void DVSReadTxt::calcPublishDisparity(
         total_time += time_taken_for_one_event;
         std::cout << "Time required to process one event: " << time_taken_for_one_event << " microseconds" << std::endl;
         std::cout << "Avg time time required to process one event: " << total_time / (double)num_of_calcs << " microseconds" << std::endl;
+    }
+
+    // COLORMAP_JET 0 = DARK BLUE, 255 = RED
+
+    // disparity.convertTo(disparity, CV_8U);                      // Convert from 64F to 8U
+    // cv::applyColorMap(disparity, color_map_, cv::COLORMAP_JET); // convert to colour map
+
+    double scale = 255.0 / (max_depth_ - min_depth_);
+    double shift = -min_depth_ * scale;
+    cv::Mat depth_8u;
+    depth.convertTo(depth_8u, CV_8U, scale, shift);
+    cv::bitwise_not(depth_8u, depth_8u);
+    cv::applyColorMap(depth_8u, color_map_, cv::COLORMAP_JET);
+    color_map_.copyTo(cv_image_disparity_.image);
+    disparity_pub_.publish(cv_image_disparity_.toImageMsg());
+}
+
+void DVSReadTxt::calcPublishDisparity2(
+    cv::Mat &event_image_polarity_left,
+    cv::Mat &event_image_polarity_right,
+    cv::Mat &left_gt_disparity,
+    std::ofstream &file)
+{
+    auto start_time = std::chrono::high_resolution_clock::now();
+    int num_of_events = 0;
+
+    cv::Mat disparity(event_image_polarity_left.size(), CV_64F, cv::Scalar(0));
+    cv::Mat depth(event_image_polarity_left.size(), CV_64F, cv::Scalar(0));
+
+    if (!file.is_open())
+    {
+        std::cerr << "Error: Unable to open disparity file for writing!" << std::endl;
+    }
+
+    int half_block = window_size_ / 2;
+    double total_pixel = window_size_ * window_size_;
+    int total_rows = event_image_polarity_left.rows - half_block - 1;
+    int total_cols = event_image_polarity_left.cols - half_block - 1;
+
+    // Use Raw pointers to speed up access
+    uchar *p_left;
+    uchar *p_right;
+    uchar *p_left_inner;
+    uchar *p_right_inner;
+
+    int best_disparity = 0;
+    double min_cost = 10000000;
+    
+    double cost = 0;
+    double num_of_similar_pixels = 0;
+    double num_of_non_similar_pixels = 0;
+
+    int num_of_valid_pixels = 0;
+    double sum_abs_diff = 0;     
+    double abs_diff = 0;
+
+    bool first_window_block = true;
+    double first_column_pol_value = 0;
+    double first_column_abs_value = 0;
+    double last_column = 0;
+
+    int left_polarity = 0;
+    int right_polarity = 0;
+    int left_polarity2 = 0;
+    int right_polarity2 = 0;
+    bool polarity_match = false;
+    bool polarity_match2 = false;
+
+    double left_ts = 0;
+    double right_ts = 0;
+    double left_ts2 = 0;
+    double right_ts2 = 0;
+
+    int left_polarity_last = 0;
+    int right_polarity_last = 0;
+    bool polarity_match_last = false;
+    double left_ts_last = 0;
+    double right_ts_last = 0;
+
+    int left_polarity_last2 = 0;
+    int right_polarity_last2 = 0;
+    bool polarity_match_last2 = 0;
+    double left_ts_last2 = 0 ;
+    double right_ts_last2 = 0;
+
+    for (int y = half_block; y < total_rows; y += 1)
+    {
+        p_left = event_image_polarity_left.ptr<uchar>(y);
+        for (int x = half_block; x < total_cols; x += 1)
+        {
+
+            if (p_left[x] == left_empty_pixel_val_)
+            {
+                continue; // skip processing
+            }
+
+#ifdef USE_NSAD
+            if (event_image_left_sum_.at<uchar>(y, x) == 0)
+            {
+                continue;
+            }
+#endif
+
+            // if (event_image_polarity_left.at<uchar>(y, x) == left_empty_pixel_val_)
+            // {
+            //     continue; // skip processing
+            // }
+
+            if (do_adaptive_window_ && image_binary_map_.at<uchar>(y, x) == 0)
+            {
+                continue;
+            }
+
+            num_of_events++;
+
+            // Window calculation
+            best_disparity = 0;
+            min_cost = 10000000;
+
+            // Compare blocks at different disparities
+            for (int d = 0; d < disparity_range_; d +=2)
+            {
+
+                if (x - half_block - d < 0)
+                {
+                    continue; // Skip
+                }
+
+                cost = 0;
+                num_of_similar_pixels = 0;
+                num_of_non_similar_pixels = 0;
+
+                num_of_valid_pixels = 0;
+                sum_abs_diff = 0;
+
+                // Magic
+                first_window_block = true;
+                first_column_pol_value = 0;
+                first_column_abs_value = 0;
+                last_column = 0;
+                if (first_window_block)
+                {
+                    // Calculate the entire block and the first column values
+                    for (int wy = -half_block; wy <= half_block; wy++)
+                    {
+                        for (int wx = -half_block; wx <= half_block; wx++)
+                        {
+                            left_polarity = event_image_polarity_left.at<int8_t>(y + wy, x + wx);
+                            right_polarity = event_image_polarity_right.at<int8_t>(y + wy, x + wx - d);
+
+                            left_ts = event_image_left_ts_.at<double>(y + wy, x + wx);
+                            right_ts = event_image_right_ts_.at<double>(y + wy, x + wx - d);
+                            abs_diff = std::abs(left_ts - right_ts);
+                            polarity_match = (left_polarity == right_polarity);
+
+                            if (wx == -half_block || wx == -half_block + 1)
+                            {
+                                if (polarity_match)
+                                {
+                                    first_column_pol_value++;
+                                }
+                                first_column_abs_value += abs_diff;
+                            }
+
+                            sum_abs_diff += abs_diff;
+                            if (polarity_match)
+                            {
+                                num_of_valid_pixels++;
+                            }
+                        }
+                    }
+                    first_window_block = false;
+                }
+                else 
+                {
+                    // Remove the contribution of the leftmost column
+                    num_of_valid_pixels -= first_column_pol_value;
+                    sum_abs_diff -= first_column_abs_value;
+                    first_column_pol_value = 0;
+                    first_column_abs_value = 0;
+
+                    for (int wy = -half_block; wy <= half_block; wy++)
+                    {
+                        // Add the contribution of the new rightmost column
+                        left_polarity = event_image_polarity_left.at<int8_t>(y + wy, x + half_block);
+                        right_polarity = event_image_polarity_right.at<int8_t>(y + wy, x + half_block - d);
+                        polarity_match = (left_polarity == right_polarity);
+                        if (polarity_match)
+                        {
+                            num_of_valid_pixels++;
+                        }
+                        left_ts = event_image_left_ts_.at<double>(y + wy, x + half_block);
+                        right_ts = event_image_right_ts_.at<double>(y + wy, x + half_block - d);
+                        sum_abs_diff += std::abs(left_ts - right_ts);
+
+                        // Add the contribution of the new rightmost column +1
+                        left_polarity2 = event_image_polarity_left.at<int8_t>(y + wy, x + half_block + 1);
+                        right_polarity2 = event_image_polarity_right.at<int8_t>(y + wy, x + half_block - d + 1);
+                        polarity_match2 = (left_polarity2 == right_polarity2);
+                        if (polarity_match2)
+                        {
+                            num_of_valid_pixels++;
+                        }
+                        left_ts2 = event_image_left_ts_.at<double>(y + wy, x + half_block + 1);
+                        right_ts2 = event_image_right_ts_.at<double>(y + wy, x + half_block - d + 1);
+                        sum_abs_diff += std::abs(left_ts2 - right_ts2);
+
+
+                        // Update last column values for next iteration
+                        left_polarity_last = event_image_polarity_left.at<int8_t>(y + wy, x - half_block);
+                        right_polarity_last = event_image_polarity_right.at<int8_t>(y + wy, x - half_block - d);
+                        polarity_match_last = (left_polarity_last == right_polarity_last);
+                        if (polarity_match_last)
+                        {
+                            first_column_pol_value++;
+                        }
+                        left_ts_last = event_image_left_ts_.at<double>(y + wy, x - half_block - 1);
+                        right_ts_last = event_image_right_ts_.at<double>(y + wy, x - half_block - d - 1);
+                        first_column_abs_value += std::abs(left_ts_last - right_ts_last);
+
+                        left_polarity_last2 = event_image_polarity_left.at<int8_t>(y + wy, x - half_block - 1);
+                        right_polarity_last2 = event_image_polarity_right.at<int8_t>(y + wy, x - half_block - d - 1);
+                        polarity_match_last2 = (left_polarity_last2 == right_polarity_last2);
+                        if (polarity_match_last2)
+                        {
+                            first_column_pol_value++;
+                        }
+                        left_ts_last2 = event_image_left_ts_.at<double>(y + wy, x - half_block - 1);
+                        right_ts_last2 = event_image_right_ts_.at<double>(y + wy, x - half_block - d - 1);
+                        first_column_abs_value += std::abs(left_ts_last2 - right_ts_last2);
+                    }
+                }   
+                
+#ifdef USE_TS
+                cost = sum_abs_diff / num_of_valid_pixels;
+#elif defined(USE_TS2)
+                cost = sum_abs_diff / num_of_valid_pixels;
+#elif defined(USE_NSAD)
+                cost = cost / num_of_valid_pixels;
+#else
+                cost = num_of_non_similar_pixels / total_pixel;
+#endif
+
+                if (cost < min_cost)
+                {
+                    min_cost = cost;
+                    best_disparity = d;
+                }
+            }
+
+            if (best_disparity != 0)
+            {
+                // double disparity_out = (best_disparity * 255 / disparity_range_);
+                // disparity.at<double>(y, x) = disparity_out;
+
+                double depth_calc = (250 * 0.12) / (best_disparity + 0.00001); // in meters
+                depth.at<double>(y, x) = depth_calc;
+
+                double gt_disparity = left_gt_disparity.at<double>(y, x);
+                number_of_left_events_estimated_++;
+                if (std::abs(best_disparity - gt_disparity < 1))
+                {
+                    number_of_accurate_left_events_++;
+                }
+                // file << y << "," << x << "," << best_disparity << "," << gt_disparity << "," << min_cost << "\n";
+
+                // disparity around this pixel is the same.
+                // for (int i = y - 1; i < y + 1; i++)
+                // {
+                //     for (int j = x - 1; j < x + 1; j++)
+                //     {
+                //         disparity.at<double>(i, j) = disparity_out;
+                //     }
+                // }
+            }
+        }
+    }
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+    std::cout << "************************* Disp calculation took: " << duration.count() / 1000.0 << " milliseconds" << std::endl;
+
+    static int num_of_calcs = 0;
+    static double total_time = 0;
+    if (num_of_events != 0)
+    {
+        num_of_calcs++;
+        double time_taken_for_one_event = (double)duration.count() / (double)num_of_events;
+        total_time += time_taken_for_one_event;
+        std::cout << "************************* Time required to process one event: " << time_taken_for_one_event << " microseconds" << std::endl;
+        std::cout << "************************* Avg time time required to process one event: " << total_time / (double)num_of_calcs << " microseconds" << std::endl;
     }
 
     // COLORMAP_JET 0 = DARK BLUE, 255 = RED
@@ -892,6 +1198,7 @@ void DVSReadTxt::publishOnce(double start_time, double end_time)
                 event_image_right_polarity_remmaped_,
                 disparity_gt_left_,
                 disparity_file_);
+            
         }
 
         publishGTDisparity(
@@ -1039,6 +1346,12 @@ void DVSReadTxt::publishEverything()
         if (do_disp_estimation_)
         {
             calcPublishDisparity(
+                event_image_left_polarity_remmaped_,
+                event_image_right_polarity_remmaped_,
+                disparity_gt_left_,
+                disparity_file_);
+
+            calcPublishDisparity2(
                 event_image_left_polarity_remmaped_,
                 event_image_right_polarity_remmaped_,
                 disparity_gt_left_,

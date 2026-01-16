@@ -19,7 +19,11 @@
   <param name="right_csv_file_path" type="string" value="/home/asus/thesis_ws/src/dvs_txt/resource/slave.csv" />
 
   <param name="disparity_range" type="int" value="30" />
+  <param name="disparity_step" type="int" value="2" />
   <param name="window_block_size" type="int" value="13" />
+
+  <!-- <param name="disparity_range" type="int" value="60" />
+  <param name="window_block_size" type="int" value="23" /> -->
 
   <param name="NN_min_num_of_events" type="int" value="2" />
   <param name="NN_block_size" type="int" value="7" />
