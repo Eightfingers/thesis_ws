@@ -40,6 +40,20 @@ public:
         cv::Mat &event_ts_prev,
         cv::Mat &map1_x,
         cv::Mat &map1_y);
+
+    void readEventsVec(
+        int &start_index,
+        std::vector<dvs_msgs::Event> &event_vector,
+        std::vector<double> &disparity_vector,
+        dvs_msgs::EventArray &event_arr,
+        cv::Mat &event_image_polarity,
+        cv::Mat &event_image_sum,
+        cv::Mat &event_image_disp_gt,
+        cv::Mat &event_ts,
+        cv::Mat &event_ts_prev,
+        cv::Mat &map1_x,
+        cv::Mat &map1_y);
+
     void applyNearestNeighborFilter(cv::Mat &event_image_pol, int value_of_empty_cell);
     void createBinaryEdgeMap(cv::Mat &event_image_pol,
                              cv::Mat &sobel_x,
@@ -51,6 +65,11 @@ public:
     void publishGTDisparity(
         cv::Mat &disparity_gt,
         image_transport::Publisher &disparity_gt_image_pub);
+
+    void publishGTDepth(
+        cv::Mat &disparity_gt,
+        image_transport::Publisher &disparity_gt_image_pub);
+
     void calcPublishDisparity(
         cv::Mat &event_image_polarity_left,
         cv::Mat &event_image_polarity_right,
@@ -60,6 +79,9 @@ public:
     void sparseRemap(cv::Mat &event_image, cv::Mat &remapped_image, cv::Mat &map1_x, cv::Mat &map1_y, int empty_pixel_value);
 
     void publishOnce(double start_time, double end_time);
+
+    void publishEverything();
+
     void loopOnce();
 
 private:
@@ -94,6 +116,10 @@ private:
     std::vector<double> right_disparity_values_;
     int left_event_index_ = 0;
     int right_event_index_ = 0;
+
+    float min_depth_ = 0.6f;
+    float max_depth_ = 5.0f;
+
 
     // Timing Control
     std::chrono::time_point<std::chrono::high_resolution_clock> time_start_;
@@ -174,11 +200,14 @@ private:
 
     // File Paths
     std::ofstream disparity_file_;
+
     std::string left_event_csv_file_path_;
     std::string right_event_csv_file_path_;
     std::string event_txt_file_path_;
     std::string disparity_path_ = "disparity_out_.txt";
 
+
+    int number_of_left_events_read_ = 0;
     int number_of_left_events_estimated_ = 0;
     int number_of_accurate_left_events_ = 0;
 };

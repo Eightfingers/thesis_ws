@@ -14,7 +14,7 @@
   <param name="camera_width" type="int" value="240" />
 
   <param name="loop_rate" type="double" value="0.04" />
-  <param name="file_path" type="string" value="/home/asus/thesis_ws/src/dvs_txt/resource/walking2.txt" />
+  <param name="file_path" type="string" value="/home/asus/thesis_ws/src/dvs_txt/resource/walking2_sliced.txt" />
   <param name="left_csv_file_path" type="string" value="/home/asus/thesis_ws/src/dvs_txt/resource/master.csv" />
   <param name="right_csv_file_path" type="string" value="/home/asus/thesis_ws/src/dvs_txt/resource/slave.csv" />
 
@@ -24,8 +24,8 @@
   <param name="NN_min_num_of_events" type="int" value="2" />
   <param name="NN_block_size" type="int" value="7" />
   
-  <param name="slice_start_time" type="double" value="2.7" />
-  <param name="slice_end_time" type="double" value="2.75" />
+  <param name="slice_start_time" type="double" value="1.7" />
+  <param name="slice_end_time" type="double" value="1.75" />
 
   <param name="large_block_size" type="int" value="13" />
   <param name="threshold_edge" type="int" value="300" />
