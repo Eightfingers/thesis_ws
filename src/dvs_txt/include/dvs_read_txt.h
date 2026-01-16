@@ -145,8 +145,8 @@ private:
     int crop_height = 630;
     int new_mid_x;
     int new_mid_y;
-    int left_empty_pixel_val_ = 127;
-    int right_empty_pixel_val_ = 126;
+    int left_empty_pixel_val_ = 2;
+    int right_empty_pixel_val_ = -2;
 
     // Algorithm Parameters
     // Nearest Neighbour
